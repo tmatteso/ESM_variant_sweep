@@ -168,10 +168,12 @@ def run_VAE(device, X, y):
         train_loss, train_loss_mse, train_loss_kld, train_loss_pred = run_model(model, train_loader, fit = True,
                                                                                 optimizer = optimizer, labeled = True, 
                                                                                 kl_weight = PARAMS['kl_weight'], 
-                                                                                pred_weight = PARAMS['pred_weight'])
+                                                                                pred_weight = PARAMS['pred_weight'],
+                                                                                device=device)
         valid_loss, valid_loss_mse, valid_loss_kld, valid_loss_pred = run_model(model, train_loader, fit = False, 
                                                                                 labeled = True, kl_weight = PARAMS['kl_weight'],
-                                                                                pred_weight = PARAMS['pred_weight'])
+                                                                                pred_weight = PARAMS['pred_weight'],
+                                                                                device=device)
 
         if epoch % 10 == 0: 
             print(('Epoch %d/%d: training loss = %.2g (MSE = %.2g, KLD = %.2g, pred = %.2g), ' + \
@@ -181,7 +183,7 @@ def run_VAE(device, X, y):
     return model
     print('Done.')
     
-def get_low_D(model, rectified_df, X):
+def get_low_D(model,device, rectified_df, X):
     # do the calc for metric nadav wants from VAE embeds
     high_D_dataset_loader = data_utils.DataLoader(torch.tensor(X, dtype = torch.float32), 
                                                   batch_size = PARAMS['batch_size'], \
@@ -190,7 +192,7 @@ def get_low_D(model, rectified_df, X):
     # batch_size is 512 rn
     with torch.no_grad():
         for batch in high_D_dataset_loader:
-            x_mu, _ = model.encode(batch.to("cpu"))
+            x_mu, _ = model.encode(batch.to(device))
             low_D_embeddings.append(x_mu.cpu().numpy())
 
 

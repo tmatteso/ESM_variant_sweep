@@ -100,6 +100,14 @@ def get_clinvar_df(filename):
 #     print(small_d.loc[small_d['reviewed'].idxmax()])
 #     raise Error
     df["mutation_name"] = df["mutation_name"].str.strip() # need to elim the empty whitespace
+    #print(len(df.index))
+    import re
+    special_character = '*'
+    # Escape the special character using re.escape
+    escaped_character = re.escape(special_character)
+    df = df[~df['mutation_name'].str.contains(escaped_character)]
+    #print(len(df.index))
+    #raise Error
     #df = df[["mutation_name", "gene_name", "clinvar_label"]]
     df["clinvar_label"] = df["clinvar_label"].str.split(r"(").str[0] 
     df["clinvar_label"] = df["clinvar_label"].map(CLINVAR_LABEL_MAPPING)
@@ -134,9 +142,14 @@ def edit_and_substr(AA_str, edit):
     original_AA = edit[0]
     change_AA = edit[-1]
     location = int(edit[1:-1]) -1 # mutations are 1 indexed!
-    if AA_str[location] != original_AA: # the indexing is off by one?
+    # size of prot seq changes between revisions
+    if location > len(AA_str):
+        #print("original AA is only "+str(len(AA_str))+" AA not "+ str(location))
         return False
-        print("original AA at pos "+str(location)+" "+original_AA+" does not match "+AA_str[location])
+    elif AA_str[location] != original_AA: # the indexing is off by one?
+        #print("original AA at pos "+str(location)+" "+original_AA+" does not match "+AA_str[location])
+        return False
+    #print(location, len(original_AA), AA_str[location], original_AA) 
     AA_str = AA_str[:location] + change_AA + AA_str[location+1:]
 #     return center_var_context(AA_str, location)
     #  print([(AA[i], i, editted_AA[i]) for i in range(len(editted_AA)) if editted_AA[i] != AA[i]])
@@ -160,7 +173,8 @@ def center_var_context(AA_str, location):
         end = int(int(location)+ (ESM_CONTEXT_LEN/2))
         #print(begin, end)
         return AA_str[begin: end]
-    
+
+# translating from uniprot to clinvar is the problem
 def get_var_cent_tuples(genes, df):
     clinvar_muts = []
     # now create all clinvar muts
@@ -169,19 +183,24 @@ def get_var_cent_tuples(genes, df):
         # as long as gene name appears in there, it's fine
         #matching_rows = df[df.applymap(lambda x: bool(re.search(gene, str(x)))).any(axis=1)]
         # consider that P53
-        matching_rows =df[df['gene_name'].str.contains(fr'\b{gene}\b', regex=True, case=False)] 
-        all_muts = matching_rows["mutation_name"].values
+        matching_rows =df[df['gene_name'] == gene] #.str.contains(fr'\b{gene}\b', regex=True, case=False)] 
+       # print(matching_rows)
+        # prevent duplicate mutations
+        all_muts = matching_rows["mutation_name"].unique()
         all_labels = matching_rows["clinvar_label"].values
         for i in range(len(all_muts)):
             mut = all_muts[i]
             # mutations are 1 indexed!
-            
+            #print(AA)
+            #print(mut)
             editted_AA = (edit_and_substr(AA, mut))
             if editted_AA is not False:
+                #print(mut)
                 # point mutation
                 clinvar_muts.append((gene+"_"+mut, center_var_context(editted_AA, mut[1:-1])))
                 # WT in frame
                 clinvar_muts.append((gene+"_"+mut+"_WT", center_var_context(AA, mut[1:-1])))
+    #raise Error
     return clinvar_muts
 
 
@@ -213,7 +232,7 @@ def get_all_mutations(seq, includeWT = True, mutation_names_prefix = ''):
 
     return all_mutations
     
-def get_ESM_tuples(genes, clinvar_muts, random_size=0):
+def get_ESM_tuples(genes, clinvar_muts, random_size=0): # the relabeling is causing the problem
     if random_size=="full":
         all_mutations = []
         for gene_name, seq in genes:

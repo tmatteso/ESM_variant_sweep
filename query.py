@@ -50,7 +50,11 @@ def knn_and_roc(X, y, multi_class='raise', average="macro"): # raise means it wi
             pred_ls.append(knn.predict_proba(test_X))
         else:
             pred_ls.append(knn.predict(test_X))
-    pred_ls = np.array(pred_ls)  
+    try:
+        pred_ls = np.array(pred_ls) 
+    except:
+        print("There is only one example of a pathogenicity class")
+        raise ValueError
     if multi_class=='ovr':
         pred_ls = pred_ls.reshape(pred_ls.shape[0], pred_ls.shape[-1])
     return roc_auc_score(y, pred_ls, multi_class=multi_class, average=average) 
@@ -146,7 +150,7 @@ def main():
     FASTA_FILE = args.gene + ".fasta"# should be derived from gene name
     MODEL_LOCATION = "esm1b_t33_650M_UR50S" # name of pretrained model, will download if not in torch cache
     # could also use a big boi model later, make sure it has the correct weights in the container
-    VARIANT_SCORES_DIR = "data/esm1b_variant_scores/ALL_hum_isoforms_ESM1b_LLR" # keep on mounted volume
+    VARIANT_SCORES_DIR = "ALL_hum_isoforms_ESM1b_LLR" #"data/esm1b_variant_scores/ALL_hum_isoforms_ESM1b_LLR" # keep on mounted volume
     # ESM INPUT PARAMS
     repr_layers = 33 # default arg in all that I've seen (final layer representation)
     toks_per_batch = 128 # could be increased all the way up to 4096, depends on RAM
@@ -170,7 +174,7 @@ def main():
         df = get_clinvar_df(ALL_CLINVAR)
         # save it for next time
         df.to_csv(DF_LOCATION)
-    print("Clinvar DataFrame Loaded") 
+    print("Clinvar DataFrame Loaded")
     # df is Unnamed: 0    Name mutation_name gene_name  clinvar_label GRCh38Chromosome GRCh38Location   Name_edit
     df = df[["mutation_name", "gene_name", "clinvar_label"]]
     # create a path_name col and use this for the graphs
@@ -195,8 +199,6 @@ def main():
         # concat the extra df to the main df
         df = pd.concat([df, extra_df])    
     print("Extra Labels Loaded")
-#     print(df.path_name.unique())
-#     raise Error
     # verify inputs with check_args
     check_args(args) #, uniprot_gene_names, clinvar_gene_names)
     # this must subset on the uniprot name of the variant in clinvar
@@ -205,9 +207,8 @@ def main():
     dictionary = dict(zip(clinvar2uniprot['Entry'], clinvar2uniprot['From']))
     # subset the df on the gene
     df = df[df["gene_name"] == dictionary[args.gene]]
+    #print(df.clinvar_label.unique())
     #df = df[df["gene_name"] == args.gene]
-    #print("Q9JJV9" in uniprot_records.gene) # so it's not in uniprot records!
-    #print(df[df.clinvar_label.notnull()].clinvar_label) # hasn't gone through the checking process, makes sense there is more
     # check how many pathogen label types there will be, activate the multiclass flag if > 2
     # compute the len of protein, must be only one gene
     gene_name = uniprot_records[uniprot_records.gene.isin([args.gene])].gene.unique()[0]
@@ -218,7 +219,10 @@ def main():
     if args.existing_embeddings in [ "esm_only", "None"]:
         if args.existing_embeddings == "None":
             genes = get_init_tuples([args.gene], uniprot_records, gene_name_to_uniprot_records)
+            # we assume the ls will always be size one as we only do one gene at time now
+            genes = [(dictionary[genes[0][0]], genes[0][1])]        
             clinvar_muts = get_var_cent_tuples(genes, df)
+            # so it should have the vars by here
             # random size is another input
             clinvar_muts = get_ESM_tuples(genes, clinvar_muts, args.num_random)
             # need fasta_file name as input
@@ -226,15 +230,19 @@ def main():
             print("Fasta written")
             # can run directly from command line as long as the extract.py script is in same dir -- do this instead
             # the default script has a gpu autodetect
-            os.system("python extract.py "+MODEL_LOCATION + " " + FASTA_FILE + " " + ESM_EMBEDDINGS +
+            print("python3 extract.py "+MODEL_LOCATION + " " + FASTA_FILE + " " + ESM_EMBEDDINGS +
+                      " --toks_per_batch "+ str(toks_per_batch) + " --repr_layers " + str(repr_layers) + " --include per_tok")
+            os.system("python3 extract.py "+MODEL_LOCATION + " " + FASTA_FILE + " " + ESM_EMBEDDINGS +
                       " --toks_per_batch "+ str(toks_per_batch) + " --repr_layers " + str(repr_layers) + " --include per_tok")
         # these are from read_embeddings.py
         # read in esm embeddings, needs dir path and df to append file paths to
+        print(df.clinvar_label.unique())
+        #print(len(df.mutation_name.unique())) # 444, but did these get included on the esm pass?
         reprs = read_esm_reprs(ESM_EMBEDDINGS, df)
         #print(reprs[reprs.clinvar_label.notnull()].clinvar_label) # 1059 -- it goes down to like 335 now
         print("ESM embeddings Loaded")
         # VARIANT_SCORES_DIR is where all the human gene LLRs live
-        merged_df = get_LLR(reprs, VARIANT_SCORES_DIR, aa_length)
+        merged_df = get_LLR(reprs, VARIANT_SCORES_DIR, aa_length, args.gene)
         # the labels are already gone
         # get the missense - WT embeds
         rectified_df = get_delta_embeds(merged_df, aa_length)
@@ -253,7 +261,7 @@ def main():
         # add an arg for if model_pretrained
         model = run_VAE(device, X, y) # null return -- might want to give pretrained weight arg (for whole genome sweep)
         # this fires the inference passes
-        low_D_embeddings = get_low_D(model, rectified_df, X) 
+        low_D_embeddings = get_low_D(model, device, rectified_df, X) 
         # save the VAE embeddings
         np.save(VAE_EMBEDDINGS, low_D_embeddings)
         print("VAE embeddings saved")
@@ -265,7 +273,7 @@ def main():
         print("UMAP embeddings saved")
         # need to write out rectified_df, align later with other embeddings based on the index
         rectified_df[['gene_name', 'mutation_name', 'LLR', 
-                      'clinvar_label', 'path_name', 'norm_LLR', 'umap1','umap2']].to_csv(RECT_DF_LOCATION, index=False)
+                      'clinvar_label', 'norm_LLR', 'umap1','umap2']].to_csv(RECT_DF_LOCATION, index=False)
         print("Final Dataframe saved")
     # these are from esm_VAE.py     
     else:
@@ -286,7 +294,8 @@ def main():
     X = rectified_df[(rectified_df["clinvar_label"] == 0) | (rectified_df["clinvar_label"] == 1)]
     pred_ls = X["LLR"].to_numpy()
     y = X["clinvar_label"].to_numpy()
-    print(args.gene)
+    print(len(rectified_df.clinvar_label.dropna()), "number of labeled variants")
+    print(dictionary[args.gene])
     print("LLR ROC-AUC: " + str(roc_auc_score(y, pred_ls)))
     path_name_in_df = rectified_df.clinvar_label.unique()
     # define X and y for the esm roc-auc calc
@@ -296,9 +305,6 @@ def main():
     else:
         multi_class='raise'
         average="mean"
-#     y = rectified_df[(rectified_df["clinvar_label"] == 0) | (rectified_df["clinvar_label"] == 1)]
-#     X = np.stack(y["repr"].values)
-#     y = y["clinvar_label"].to_numpy() 
     # will come out as one versus rest:
     path_name_ls = ['Benign', 'Pathogenic', 'AR-GOF', 'AR-LOF', 'AD-LOF', 'AD-GOF', 'ADAR-LOF', 'ADAR-GOF']
     # ESM

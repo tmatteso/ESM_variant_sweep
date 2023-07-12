@@ -74,36 +74,43 @@ to_uniprot = {
 
 
 
-def get_LLR(reprs, VARIANT_SCORES_DIR, aa_length): # clinvar labels lost
+def get_LLR(reprs, VARIANT_SCORES_DIR, aa_length, gene_name): # clinvar labels lost
     #VARIANT_SCORES_DIR = "data/esm1b_variant_scores/ALL_hum_isoforms_ESM1b_LLR"
-    relevant_LLR = []
-    for gene_name in reprs['gene_name'].unique(): # '%s_LLR.csv' % to_uniprot[gene_name])
-        if gene_name in to_uniprot.keys():
-            gene_name = to_uniprot[gene_name]
+    #relevant_LLR = []
+    #print(reprs.clinvar_label.unique())
+    #for gene_name in reprs['gene_name'].unique(): # '%s_LLR.csv' % to_uniprot[gene_name])
+    #    if gene_name in to_uniprot.keys():
+    #        gene_name = to_uniprot[gene_name]
+        #print(gene_name)
         # the WT is lost here, look at your newer code
-        raw_LLR_df = pd.read_csv(os.path.join(VARIANT_SCORES_DIR, '%s_LLR.csv' %  gene_name), index_col = 0)
-        LLR_df = raw_LLR_df.stack().reset_index().rename(columns = {'level_0': 'mt_aa', 'level_1': 'wt_aa_and_pos', 0: 'LLR'})
-        LLR_df['mutation_name'] = LLR_df['wt_aa_and_pos'].str.replace(' ', '') + LLR_df['mt_aa']
-        del LLR_df['wt_aa_and_pos'], LLR_df['mt_aa']
-        LLR_df['gene_name'] = gene_name
-        #relevant_LLR.append(LLR_df)
+    raw_LLR_df = pd.read_csv(os.path.join(VARIANT_SCORES_DIR, '%s_LLR.csv' %  gene_name), index_col = 0)
+    #print(raw_LLR_df)
+    LLR_df = raw_LLR_df.stack().reset_index().rename(columns = {'level_0': 'mt_aa', 'level_1': 'wt_aa_and_pos', 0: 'LLR'})
+    LLR_df['mutation_name'] = LLR_df['wt_aa_and_pos'].str.replace(' ', '') + LLR_df['mt_aa']
+    del LLR_df['wt_aa_and_pos'], LLR_df['mt_aa']
+    LLR_df['gene_name'] = gene_name
+    #relevant_LLR.append(LLR_df)
     # now add WT
     if aa_length <= 1022:
         dic = {'LLR': 0.0, 'mutation_name': "WT", 'gene_name': "P53"}
         LLR_df = pd.concat([LLR_df, pd.DataFrame([dic])], ignore_index=True)
     # now merge relevant_LLR and reprs on mutation name
+    #print(pd.merge(reprs, LLR_df, on="mutation_name").clinvar_label.unique())
     return pd.merge(reprs, LLR_df, on="mutation_name")
 
 
 def get_delta_embeds(merged_df, aa_length):
     rectified_df = []
+    print(merged_df.gene_name_x.unique())
     # have to go through the vector subtraction step here, elims the WT
     for gene in merged_df.gene_name_x.unique():
         for mut in merged_df.mutation_name.unique():
+            #print(gene, mut)
             if aa_length <= 1022:
                 # then the WT is different, doesn't need to do variant centering 
                 WT = merged_df[(merged_df["WT"] == True)]["mutation_repr"].values[0]
             else:
+                # gene_name might be an issue again
                 WT = merged_df[(merged_df["gene_name_x"] == gene) &
                                (merged_df["mutation_name"] == mut) & 
                                (merged_df["WT"] == True)]["mutation_repr"].values[0]
