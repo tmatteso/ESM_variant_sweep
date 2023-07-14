@@ -291,17 +291,23 @@ def main():
         rectified_df["umap_embed"] = umap_embeds.tolist()
         print("Final Dataframe with all embeddings loaded")
     # LLR ROC-AUC
-    X = rectified_df[(rectified_df["clinvar_label"] == 0) | (rectified_df["clinvar_label"] == 1)]
-    pred_ls = X["LLR"].to_numpy()
-    y = X["clinvar_label"].to_numpy()
-    print(len(rectified_df.clinvar_label.dropna()), "number of labeled variants")
-    print(dictionary[args.gene])
-    print("LLR ROC-AUC: " + str(roc_auc_score(y, pred_ls)))
-    path_name_in_df = rectified_df.clinvar_label.unique()
+    print("gene name:", dictionary[args.gene])
+    # make sure there are nonzero benign and pathogenic labels
+    available_labels = rectified_df.clinvar_label.unique()
+    print("available_labels:", available_labels)
+    if 0 in available_labels and 1 in available_labels:
+        X = rectified_df[(rectified_df["clinvar_label"] == 0) | (rectified_df["clinvar_label"] == 1)]
+        pred_ls = X["LLR"].to_numpy()
+        y = X["clinvar_label"].to_numpy()
+        print( "number of labeled variants: ", len(rectified_df.clinvar_label.dropna()))
+        print("LLR ROC-AUC: " + str(roc_auc_score(y, pred_ls)))
+    else:
+        print( "number of labeled variants: ", len(rectified_df.clinvar_label.dropna()))
+        print("LLR ROC-AUC: NaN")
     # define X and y for the esm roc-auc calc
-    if len(path_name_in_df) > 3:
-        multi_class='ovr'
-        average=None
+    if len(available_labels) > 3: # NaN is included in here
+        multi_class='ovr'# do not actually compute ovr
+        average="mean" #was None
     else:
         multi_class='raise'
         average="mean"
@@ -310,17 +316,17 @@ def main():
     # ESM
     X = np.stack(rectified_df.dropna().repr.values)
     y = rectified_df.dropna().clinvar_label.to_numpy() 
-    get_all_roc(X, y, path_name_in_df, "ESM", multi_class, average)
+    get_all_roc(X, y, available_labels, "ESM", multi_class, average)
     # define X and y for VAE roc auc
     X = np.stack(rectified_df.dropna().VAE_embed.values)
     y = rectified_df.dropna().clinvar_label.to_numpy() 
-    get_all_roc(X, y, path_name_in_df, "VAE", multi_class, average)
+    get_all_roc(X, y, available_labels, "VAE", multi_class, average)
     # define X and y for UMAP ROC-AUC
     X = np.stack(rectified_df.dropna().umap_embed.values)
     y = rectified_df.dropna().clinvar_label.to_numpy()     
-    get_all_roc(X, y, path_name_in_df, "UMAP", multi_class, average)    
+    get_all_roc(X, y, available_labels, "UMAP", multi_class, average)    
     # these are from UMAP_graphs.py
-    # LLR graph
+    # LLR graph -- add more logic here
     if args.get_graphs in ["llr_only", "all"]:
         # get_pos is another input, now we use the rectified_df path_name column for labelling the graphs
         get_LLR_graph(rectified_df, args.gene, get_pos=False)
@@ -335,15 +341,27 @@ def main():
 
 def get_all_roc(X, y, path_name_in_df, roc_type, multi_class, average):    
     path_name_ls = ['Benign', 'Pathogenic', 'AR-GOF', 'AR-LOF', 'AD-LOF', 'AD-GOF', 'ADAR-LOF', 'ADAR-GOF']
-    j = 0
+    k = 0
     if multi_class == "raise":
         print(roc_type +" ROC-AUC: " + str(knn_and_roc(X, y)))       
     else:
-        roc_auc_ls = knn_and_roc(X, y, multi_class, average)
-        for i in range(len(path_name_ls)):
-            if i in path_name_in_df:
-                print(roc_type + " OVR ROC-AUC for " + path_name_ls[i] +" is "+ str(roc_auc_ls[j]))
-                j += 1
-    
+        # need to modify knn_and_roc behavior for multiclass
+        # partition into clinvar part
+        if 0 in path_name_in_df and 1 in path_name_in_df:
+            clinvar_X = X[(y == 0) | (y == 1)]
+            clinvar_y = y[(y == 0) | (y == 1)]
+            print(roc_type  + " Clinvar ROC-AUC: " +  str(knn_and_roc(clinvar_X, clinvar_y)))
+        else:
+            print(roc_type  + " Clinvar ROC-AUC: NaN")
+        # partition into LOF-GOF part
+        label_num = max(path_name_in_df[~np.isnan(path_name_in_df)])
+        lof_gof_X = X[(y == label_num - 1) | (y == label_num)] 
+        lof_gof_y = y[(y == label_num - 1) | (y == label_num)]
+        # old version of multiclass #roc_auc_ls = knn_and_roc(X, y, multi_class, average)
+        #for i in range(len(path_name_ls)):
+        #    if i in path_name_in_df:
+        print(roc_type  + " LOF-GOF ROC-AUC: " +  str(knn_and_roc(lof_gof_X, lof_gof_y)))
+        # path_name_ls[i] +" is "+ str(roc_auc_ls[k]))
+        #k += 1 
 if __name__ == "__main__":
      main()
