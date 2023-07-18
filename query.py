@@ -106,6 +106,13 @@ def create_parser():
         default="None",
         help="Tells the pipeline which directory to take the esm embeddings from. Assumes None by default.",
     )
+    # args.recompute_delta
+    parser.add_argument( # ["llr_only, "llr_pos", "clinvar_only", "all"]
+        "--recompute_delta",
+        type=str,
+        default="True",
+        help="Tells the pipeline which directory to recompute the delta embeddings or not. Assumes True by default.",
+    )
     return parser
 
 
@@ -245,9 +252,16 @@ def main():
         merged_df = get_LLR(reprs, VARIANT_SCORES_DIR, aa_length, args.gene)
         # the labels are already gone
         # get the missense - WT embeds
-        rectified_df = get_delta_embeds(merged_df, aa_length)
-        # save the output here from the delta embed process
-        np.save(DELTA_EMBEDDINGS, rectified_df["repr"].values)
+        if args.recompute_delta == "True":
+            print("Recomputing Delta Embeddings")
+            rectified_df = get_delta_on_mut_pos(merged_df, aa_length) #get_delta_embeds(merged_df, aa_length)
+            # save the output here from the delta embed process
+            # need additional logic to know when to skip this -- just a new arg that asks to recompute delta embeds
+            np.save(DELTA_EMBEDDINGS, rectified_df["repr"].values)
+        else:
+            # need to make sure rectified_df is still available then
+            rectified_df = pd.read_csv(RECT_DF_LOCATION)
+            rectified_df["repr"]  = np.load(DELTA_EMBEDDINGS,allow_pickle=True).tolist()
         print("Delta embeddings Loaded")
         # get the VAE embeddings
         X = StandardScaler().fit_transform(np.stack(rectified_df["repr"]))# actual tensors
@@ -268,7 +282,7 @@ def main():
         # get the UMAP embeddings
         rectified_df = get_UMAP(low_D_embeddings, rectified_df)
         # save the UMAP embeddings
-        print(rectified_df["umap_embed"].values)
+        #print(rectified_df["umap_embed"].values)
         np.save(UMAP_EMBEDDINGS, rectified_df["umap_embed"].values)
         print("UMAP embeddings saved")
         # need to write out rectified_df, align later with other embeddings based on the index
@@ -292,9 +306,21 @@ def main():
         print("Final Dataframe with all embeddings loaded")
     # LLR ROC-AUC
     print("gene name:", dictionary[args.gene])
-    # make sure there are nonzero benign and pathogenic labels
+    print("gene length:", aa_length)
     available_labels = rectified_df.clinvar_label.unique()
-    print("available_labels:", available_labels)
+    path_name_ls = ['Benign', 'Pathogenic', 'AR-GOF', 'AR-LOF', 'AD-LOF', 'AD-GOF', 'ADAR-LOF', 'ADAR-GOF']
+    # print number of labels for each label type
+    if 0 not in available_labels:
+        print("available", path_name_ls[0], "labels: NaN")
+    #if 1 not in available_labels:
+    #    print("available", path_name_ls[1], "labels: NaN")
+    for i in range(len(path_name_ls)):
+        if int(i) in available_labels:
+        #if not np.isnan(label_type):
+            #print(label_type)
+            num_labels = len(rectified_df[(rectified_df["clinvar_label"] == i)].index)
+            print("available", path_name_ls[i], "labels:", (num_labels))
+    #raise Error
     if 0 in available_labels and 1 in available_labels:
         X = rectified_df[(rectified_df["clinvar_label"] == 0) | (rectified_df["clinvar_label"] == 1)]
         pred_ls = X["LLR"].to_numpy()
@@ -311,8 +337,6 @@ def main():
     else:
         multi_class='raise'
         average="mean"
-    # will come out as one versus rest:
-    path_name_ls = ['Benign', 'Pathogenic', 'AR-GOF', 'AR-LOF', 'AD-LOF', 'AD-GOF', 'ADAR-LOF', 'ADAR-GOF']
     # ESM
     X = np.stack(rectified_df.dropna().repr.values)
     y = rectified_df.dropna().clinvar_label.to_numpy() 

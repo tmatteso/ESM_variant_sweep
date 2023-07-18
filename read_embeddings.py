@@ -98,6 +98,80 @@ def get_LLR(reprs, VARIANT_SCORES_DIR, aa_length, gene_name): # clinvar labels l
     #print(pd.merge(reprs, LLR_df, on="mutation_name").clinvar_label.unique())
     return pd.merge(reprs, LLR_df, on="mutation_name")
 
+def get_mut_pos_in_embed(mutation, aa_length):
+    pos = int(mutation[1:-1]) -1
+    ESM_CONTEXT_LEN = 1022
+    if aa_length <= ESM_CONTEXT_LEN:
+        return pos
+        # if too early in str for center
+    elif pos < ESM_CONTEXT_LEN/2: 
+        return pos
+    # if too late in str for center
+    elif aa_length - pos < ESM_CONTEXT_LEN/2: # pass test
+        #print(-1*(aa_length - pos))
+        return int(-1*(aa_length - pos)) # this would be the negative index
+    # if sufficient space on either side
+    else: # it seems this works too now
+        # then should be dead center
+        return int(ESM_CONTEXT_LEN/2)
+
+# new function
+# take the embedding just from the mutaton position and ignore all other positions: 
+# just slice on the index, perform the subtraction, and do not take the average, then recompute all embeddings and scores
+def get_delta_on_mut_pos(merged_df, aa_length):
+    rectified_df = []
+    print(merged_df.gene_name_x.unique())
+    # have to go through the vector subtraction step here, elims the WT
+    for gene in merged_df.gene_name_x.unique():
+        for mut in merged_df.mutation_name.unique():
+            #print(gene, mut)
+            if aa_length <= 1022:
+                # then the WT is different, doesn't need to do variant centering 
+                WT = merged_df[(merged_df["WT"] == True)]["mutation_repr"].values[0]
+            else:
+                # gene_name might be an issue again
+                WT = merged_df[(merged_df["gene_name_x"] == gene) &
+                               (merged_df["mutation_name"] == mut) &
+                               (merged_df["WT"] == True)]["mutation_repr"].values[0]
+            if mut == "WT":
+                # check that the big one with full to make sure it make sure it's alright
+                missense = merged_df[(merged_df["gene_name_x"] == gene) &
+                                     (merged_df["mutation_name"] == mut) &
+                                     (merged_df["WT"] == True)]["mutation_repr"].values[0]
+                LLR = merged_df[(merged_df["gene_name_x"] == gene) &
+                                (merged_df["mutation_name"] == mut) &
+                                (merged_df["WT"] == True)]["LLR"].values[0]
+                clinvar_label = merged_df[(merged_df["gene_name_x"] == gene) &
+                                (merged_df["mutation_name"] == mut) &
+                                (merged_df["WT"] == True)]["clinvar_label"].values[0]
+            else:
+                missense = merged_df[(merged_df["gene_name_x"] == gene) &
+                                     (merged_df["mutation_name"] == mut) &
+                                     (merged_df["WT"] == False)]["mutation_repr"].values[0]
+                LLR = merged_df[(merged_df["gene_name_x"] == gene) &
+                                (merged_df["mutation_name"] == mut) &
+                                (merged_df["WT"] == False)]["LLR"].values[0]
+                clinvar_label = merged_df[(merged_df["gene_name_x"] == gene) &
+                                (merged_df["mutation_name"] == mut) &
+                                (merged_df["WT"] == False)]["clinvar_label"].values[0]
+            WT_embed = torch.load(WT)["representations"][33].numpy()
+            missense_embed = torch.load(missense)["representations"][33].numpy()
+            pos = get_mut_pos_in_embed(mut, aa_length)
+            #print(mut, aa_length, pos)
+            # now use the aa_len and the mut position to slice the embedding
+            delta_embed = WT_embed[pos] - missense_embed[pos] # check shape of these embeds before indexing
+            rectified_df.append([gene,
+                                mut,
+                                delta_embed, #performs the sum-- do not sum for this version
+                                LLR,
+                                clinvar_label])
+    rectified_df = pd.DataFrame(columns=['gene_name', 'mutation_name', 'repr', 'LLR', 'clinvar_label'],
+                                data=rectified_df)
+
+    rectified_df['norm_LLR'] = np.clip(rectified_df['LLR'], None, 0)
+    rectified_df['norm_LLR'] -= rectified_df['norm_LLR'].min()
+    rectified_df['norm_LLR'] /= rectified_df['norm_LLR'].max()
+    return rectified_df
 
 def get_delta_embeds(merged_df, aa_length):
     rectified_df = []
