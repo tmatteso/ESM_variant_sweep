@@ -17,6 +17,7 @@ from all_genes import *
 from read_embeddings import *
 from esm_VAE import *
 from UMAP_graphs import *
+from classifiers import *
 
 def write_fasta(output_file, clinvar_muts):
     #"additional_PKD1.fasta"#"all_PKD1.fasta" #'all_mutations.fasta'
@@ -29,35 +30,36 @@ def write_fasta(output_file, clinvar_muts):
             # Write the sequence
             file.write(f'{AA}\n')
 
-def knn_and_roc(X, y, multi_class='raise', average="macro"): # raise means it will complain about multiclass until overridden
-    pred_ls = []
-    # calc for each var in the X
-    for data_i in range(X.shape[0]):
-        # Classify that variants with KNN (e.g. for K=5), i.e. assign each variant with a score 0<=s<=1 
-        # which indicates the fraction of its K closest variants that are pathogenic (excluding the variant itself of course).
-        knn = KNeighborsClassifier(n_neighbors=5) 
-        # need to concat
-        train_X, train_y = np.concatenate([X[:data_i], X[data_i+1:]]), np.concatenate([y[:data_i], y[data_i+1:]])
-        #print(y[data_i])
-        test_X, test_y =  X[data_i].reshape(1, X.shape[1]), y[data_i].reshape(1, 1)
-        # make sure that the variant you want is excluded in train, and only that var in test
-        knn.fit(train_X, train_y) # not using anything held out
-        # Each variant should now have a true label (y_true) and predicted label probably (y_pred_prob). 
-        # Use the ROC-AUC metric to determine to what extent y_pred_prob is a good predictor of y_true. 
-        # This will give you a number between 0 and 1 which indicates whether variants of the same label 
-        # tend to cluster together (but without having to run any clustering algorithm).
-        if multi_class=='ovr':
-            pred_ls.append(knn.predict_proba(test_X))
-        else:
-            pred_ls.append(knn.predict(test_X))
-    try:
-        pred_ls = np.array(pred_ls) 
-    except:
-        print("There is only one example of a pathogenicity class")
-        raise ValueError
-    if multi_class=='ovr':
-        pred_ls = pred_ls.reshape(pred_ls.shape[0], pred_ls.shape[-1])
-    return roc_auc_score(y, pred_ls, multi_class=multi_class, average=average) 
+#def knn_and_roc(X, y, multi_class='raise', average="macro", classifier=KNeighborsClassifier(n_neighbors=5)): 
+#    # raise means it will complain about multiclass until overridden
+#    pred_ls = []
+#    # calc for each var in the X
+#    for data_i in range(X.shape[0]):
+#        # Classify that variants with KNN (e.g. for K=5), i.e. assign each variant with a score 0<=s<=1 
+#        # which indicates the fraction of its K closest variants that are pathogenic (excluding the variant itself of course).
+#        knn = classifier #KNeighborsClassifier(n_neighbors=5) 
+#        # need to concat
+#        train_X, train_y = np.concatenate([X[:data_i], X[data_i+1:]]), np.concatenate([y[:data_i], y[data_i+1:]])
+#        #print(y[data_i])
+#        test_X, test_y =  X[data_i].reshape(1, X.shape[1]), y[data_i].reshape(1, 1)
+#        # make sure that the variant you want is excluded in train, and only that var in test
+#        knn.fit(train_X, train_y) # not using anything held out
+#        # Each variant should now have a true label (y_true) and predicted label probably (y_pred_prob). 
+#        # Use the ROC-AUC metric to determine to what extent y_pred_prob is a good predictor of y_true. 
+#        # This will give you a number between 0 and 1 which indicates whether variants of the same label 
+#        # tend to cluster together (but without having to run any clustering algorithm).
+#        if multi_class=='ovr':
+#            pred_ls.append(knn.predict_proba(test_X))
+#        else:
+#            pred_ls.append(knn.predict(test_X))
+#    try:
+#        pred_ls = np.array(pred_ls) 
+#    except:
+#        print("There is only one example of a pathogenicity class")
+#        raise ValueError
+#    if multi_class=='ovr':
+#        pred_ls = pred_ls.reshape(pred_ls.shape[0], pred_ls.shape[-1])
+#    return roc_auc_score(y, pred_ls, multi_class=multi_class, average=average) 
                 
 # an arg parser is a good idea
 # python query.py P53 num_random=full
@@ -325,11 +327,14 @@ def main():
         X = rectified_df[(rectified_df["clinvar_label"] == 0) | (rectified_df["clinvar_label"] == 1)]
         pred_ls = X["LLR"].to_numpy()
         y = X["clinvar_label"].to_numpy()
-        print( "number of labeled variants: ", len(rectified_df.clinvar_label.dropna()))
-        print("LLR ROC-AUC: " + str(roc_auc_score(y, pred_ls)))
+        print( "number of labeled variants:", len(rectified_df.clinvar_label.dropna()))
+        print("LLR ROC-AUC:", str(roc_auc_score(y, pred_ls)))
+        pred_ls = pred_ls.reshape(pred_ls.shape[0], 1)
+        print("LLR-KNN ROC-AUC:",  knn_and_roc(pred_ls, y))
     else:
         print( "number of labeled variants: ", len(rectified_df.clinvar_label.dropna()))
         print("LLR ROC-AUC: NaN")
+        print("LLR-KNN ROC-AUC: NaN")
     # define X and y for the esm roc-auc calc
     if len(available_labels) > 3: # NaN is included in here
         multi_class='ovr'# do not actually compute ovr
@@ -341,6 +346,8 @@ def main():
     X = np.stack(rectified_df.dropna().repr.values)
     y = rectified_df.dropna().clinvar_label.to_numpy() 
     get_all_roc(X, y, available_labels, "ESM", multi_class, average)
+    one_gene_clf(X, y, available_labels, "ESM", multi_class,average)
+    #all_gene_clf(X, y, path_name_in_df, gene_space,multi_class,average)
     # define X and y for VAE roc auc
     X = np.stack(rectified_df.dropna().VAE_embed.values)
     y = rectified_df.dropna().clinvar_label.to_numpy() 
@@ -363,29 +370,29 @@ def main():
         get_clinvar_graph(args.gene, rectified_df)
     print("All Graphs created")
 
-def get_all_roc(X, y, path_name_in_df, roc_type, multi_class, average):    
-    path_name_ls = ['Benign', 'Pathogenic', 'AR-GOF', 'AR-LOF', 'AD-LOF', 'AD-GOF', 'ADAR-LOF', 'ADAR-GOF']
-    k = 0
-    if multi_class == "raise":
-        print(roc_type +" ROC-AUC: " + str(knn_and_roc(X, y)))       
-    else:
-        # need to modify knn_and_roc behavior for multiclass
-        # partition into clinvar part
-        if 0 in path_name_in_df and 1 in path_name_in_df:
-            clinvar_X = X[(y == 0) | (y == 1)]
-            clinvar_y = y[(y == 0) | (y == 1)]
-            print(roc_type  + " Clinvar ROC-AUC: " +  str(knn_and_roc(clinvar_X, clinvar_y)))
-        else:
-            print(roc_type  + " Clinvar ROC-AUC: NaN")
-        # partition into LOF-GOF part
-        label_num = max(path_name_in_df[~np.isnan(path_name_in_df)])
-        lof_gof_X = X[(y == label_num - 1) | (y == label_num)] 
-        lof_gof_y = y[(y == label_num - 1) | (y == label_num)]
-        # old version of multiclass #roc_auc_ls = knn_and_roc(X, y, multi_class, average)
-        #for i in range(len(path_name_ls)):
-        #    if i in path_name_in_df:
-        print(roc_type  + " LOF-GOF ROC-AUC: " +  str(knn_and_roc(lof_gof_X, lof_gof_y)))
-        # path_name_ls[i] +" is "+ str(roc_auc_ls[k]))
-        #k += 1 
+#def get_all_roc(X, y, path_name_in_df, roc_type, multi_class, average):    
+#    path_name_ls = ['Benign', 'Pathogenic', 'AR-GOF', 'AR-LOF', 'AD-LOF', 'AD-GOF', 'ADAR-LOF', 'ADAR-GOF']
+#    k = 0
+#    if multi_class == "raise":
+#        print(roc_type +" ROC-AUC: " + str(knn_and_roc(X, y)))       
+#    else:
+#        # need to modify knn_and_roc behavior for multiclass
+#        # partition into clinvar part
+#        if 0 in path_name_in_df and 1 in path_name_in_df:
+#            clinvar_X = X[(y == 0) | (y == 1)]
+#            clinvar_y = y[(y == 0) | (y == 1)]
+#            print(roc_type  + " Clinvar ROC-AUC: " +  str(knn_and_roc(clinvar_X, clinvar_y)))
+#        else:
+#            print(roc_type  + " Clinvar ROC-AUC: NaN")
+#        # partition into LOF-GOF part
+#        label_num = max(path_name_in_df[~np.isnan(path_name_in_df)])
+#        lof_gof_X = X[(y == label_num - 1) | (y == label_num)] 
+#        lof_gof_y = y[(y == label_num - 1) | (y == label_num)]
+#        # old version of multiclass #roc_auc_ls = knn_and_roc(X, y, multi_class, average)
+#        #for i in range(len(path_name_ls)):
+#        #    if i in path_name_in_df:
+#        print(roc_type  + " LOF-GOF ROC-AUC: " +  str(knn_and_roc(lof_gof_X, lof_gof_y)))
+#        # path_name_ls[i] +" is "+ str(roc_auc_ls[k]))
+#        #k += 1 
 if __name__ == "__main__":
      main()
