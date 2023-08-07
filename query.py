@@ -322,17 +322,15 @@ def main():
             #print(label_type)
             num_labels = len(rectified_df[(rectified_df["clinvar_label"] == i)].index)
             print("available", path_name_ls[i], "labels:", (num_labels))
-    #raise Error
+    print( "number of labeled variants:", len(rectified_df.clinvar_label.dropna()))
     if 0 in available_labels and 1 in available_labels:
         X = rectified_df[(rectified_df["clinvar_label"] == 0) | (rectified_df["clinvar_label"] == 1)]
         pred_ls = X["LLR"].to_numpy()
         y = X["clinvar_label"].to_numpy()
-        print( "number of labeled variants:", len(rectified_df.clinvar_label.dropna()))
         print("LLR ROC-AUC:", str(roc_auc_score(y, pred_ls)))
         pred_ls = pred_ls.reshape(pred_ls.shape[0], 1)
-        print("LLR-KNN ROC-AUC:",  knn_and_roc(pred_ls, y))
+        print("LLR-KNN ROC-AUC:",  special_knn(pred_ls, y)) #replace knn_and_roc with special_knn for now
     else:
-        print( "number of labeled variants: ", len(rectified_df.clinvar_label.dropna()))
         print("LLR ROC-AUC: NaN")
         print("LLR-KNN ROC-AUC: NaN")
     # define X and y for the esm roc-auc calc
@@ -344,7 +342,8 @@ def main():
         average="mean"
     # ESM
     X = np.stack(rectified_df.dropna().repr.values)
-    y = rectified_df.dropna().clinvar_label.to_numpy() 
+    y = rectified_df.dropna().clinvar_label.to_numpy()
+    print(multi_class, average)
     get_all_roc(X, y, available_labels, "ESM", multi_class, average)
     one_gene_clf(X, y, available_labels, "ESM", multi_class,average)
     #all_gene_clf(X, y, path_name_in_df, gene_space,multi_class,average)
