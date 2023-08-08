@@ -329,6 +329,7 @@ def main():
         y = X["clinvar_label"].to_numpy()
         print("LLR ROC-AUC:", str(roc_auc_score(y, pred_ls)))
         pred_ls = pred_ls.reshape(pred_ls.shape[0], 1)
+        print(classifier_LOO(pred_ls,y), "check it out") #, classifier=None)
         print("LLR-KNN ROC-AUC:",  special_knn(pred_ls, y)) #replace knn_and_roc with special_knn for now
     else:
         print("LLR ROC-AUC: NaN")
@@ -344,7 +345,17 @@ def main():
     X = np.stack(rectified_df.dropna().repr.values)
     y = rectified_df.dropna().clinvar_label.to_numpy()
     print(multi_class, average)
+    # get knn clinvar 
+    clinvar_X = X[(y == 0) | (y == 1)]
+    clinvar_y = y[(y == 0) | (y == 1)]
+    # get knn lof gof
+    label_num = max(available_labels[~np.isnan(available_labels)])
+    lof_gof_X = X[(y == label_num - 1) | (y == label_num)]
+    lof_gof_y = y[(y == label_num - 1) | (y == label_num)]
+    print(classifier_LOO(lof_gof_X,lof_gof_y), "ESM knn lof gof")
     get_all_roc(X, y, available_labels, "ESM", multi_class, average)
+    # looks like classifier LOO is good for all clfs
+    print(classifier_LOO(clinvar_X,clinvar_y, classifier=1), "ESM gnb clinvar") 
     one_gene_clf(X, y, available_labels, "ESM", multi_class,average)
     #all_gene_clf(X, y, path_name_in_df, gene_space,multi_class,average)
     # define X and y for VAE roc auc

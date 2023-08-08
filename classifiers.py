@@ -7,12 +7,103 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.neighbors import NearestNeighbors
 
-# get all genes to work
-# then I think a refactor is in order
+# then I think a refactor is in order for special knn and knn_and_roc
 # the changes you made to make refactor work are pretty atrocious
 # no more than nesting 2 loops or 2 conditionals at a time, and only 3 total if trying both
 # need more subroutines, functions have become too large
 # optimal function size for me is 10<=x=<50 lines
+
+
+
+
+
+def special_knn_sep(class_weights, X_train, X_test, y_train, y_test):
+    # this part is boiler plate for any knn
+    if len(y_train) < 10:
+        knn = NearestNeighbors(n_neighbors=len(y_train))
+    else:
+        knn = NearestNeighbors(n_neighbors=10)
+    unique_elements, counts = np.unique(y_train, return_counts=True)
+    knn.fit(X_train, y_train) # not using anything held out
+    # now get the nearest neighbors out, based on the test_X query
+    neighbors = knn.kneighbors(X_test, return_distance=False)
+    # should be np array, check for shape here
+    neighbor_classes = np.take(y_train, neighbors, 0) # final arg is axis number, check to make sure which is which
+    # broadcast the multiplication with your class_weights
+    class_votes = [class_weights[i] * len(neighbor_classes[neighbor_classes == unique_elements[i]]) for i in range(len(unique_elements))]
+    return unique_elements[np.argmax(class_votes)]
+
+def special_knn_2d(class_weights, X_train, X_test, y_train, y_test):
+    knn = NearestNeighbors(n_neighbors=10)
+    pred_ls = []
+    unique_elements, counts = np.unique(y_train, return_counts=True)
+    knn.fit(X_train, y_train) # not using anything held out 
+    # now get the nearest neighbors out, based on the test_X query
+    neighbors = knn.kneighbors(X_test, return_distance=False)
+    # should be np array, check for shape here
+    neighbor_classes = np.take(y_train, neighbors, 0)
+    # for arr in 2d arr
+    for j in range(neighbor_classes.shape[0]):
+    # if arr has more 0 than 1, call as 0 , o.w. 1
+        class_votes =[class_weights[i]*len(neighbor_classes[j][neighbor_classes[j] == unique_elements[i]]) for i in range(len(unique_elements))]
+        # make the prediction based on the reweighted votes
+        pred_ls.append(unique_elements[np.argmax(class_votes)])
+    # do this for whole vect, returning a 2d arr.shape[0] vect
+    return np.array(pred_ls)
+
+def other_clf_sep(classifier, X_train, X_test, y_train, y_test):
+    clf = classifier_space[classifier]
+    unique_elements, counts = np.unique(y_train, return_counts=True)
+    if 1 in counts and clf_names[classifier] == "Logistic Regression":
+        return "NaN"
+    clf.fit(X_train, y_train)
+    return clf.predict(X_test)
+
+# classifier leave one out
+def classifier_LOO(X,y, classifier=None):
+    # calculate class proportions and use for reweighting
+    pred_ls = []
+    unique_elements, counts = np.unique(y, return_counts=True)
+    total = sum(counts)
+    class_weights = [1 - counts[i]/total for i in range(len(counts))]
+    for data_i in range(X.shape[0]):
+        # Leave only one out in test
+        X_train, y_train = np.concatenate([X[:data_i], X[data_i+1:]]), np.concatenate([y[:data_i], y[data_i+1:]])
+        X_test, y_test =  X[data_i].reshape(1, X.shape[1]), y[data_i].reshape(1, 1)
+        # the classifier cond should be here
+        if classifier == None:
+            pred_point = special_knn_sep(class_weights, X_train, X_test, y_train, y_test)
+        else:
+            pred_point = other_clf_sep(classifier, X_train, X_test, y_train, y_test)
+        pred_ls.append(pred_point)
+    try:
+        pred_ls = np.array(pred_ls)
+    except:
+        print("There is only one example of a pathogenicity class")
+        raise ValueError
+    return roc_auc_score(y, pred_ls)
+
+# test this with the other clfs in query.py
+
+# clf with full split precomputed
+def classifier_full_split(X, y, classifier=None):
+    # calculate class proportions and use for reweighting
+    pred_ls = []
+    unique_elements, counts = np.unique(y, return_counts=True)
+    total = sum(counts)
+    class_weights = [1 - counts[i]/total for i in range(len(counts))]
+    # split into train and test
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
+    # now perform the classification task
+    if classifier == None:
+        predictions = special_knn_2d(class_weights, X_train, X_test, y_train, y_test)
+    else:
+        predictions = other_clf_sep(classifier, X_train, X_test, y_train, y_test)
+    print(y_test.shape)
+    print(predictions.shape)
+    return roc_auc_score(y_test, predictions)
+
+# now test this one
 
 def special_knn(X, y, split=None):
     # calculate class proportions and use for reweighting
@@ -151,7 +242,9 @@ def knn_and_roc(X, y, multi_class='raise', average="macro", classifier=None, spl
     if multi_class=='ovr':
         pred_ls = pred_ls.reshape(pred_ls.shape[0], pred_ls.shape[-1])
     return roc_auc_score(y, pred_ls, multi_class=multi_class, average=average) 
- 
+
+
+# dump get_all_roc and move the partition logic elsewhere
 def get_all_roc(X, y, path_name_in_df, roc_type, multi_class, average, classifier=None, split=None):     
     path_name_ls = ['Benign', 'Pathogenic', 'AR-GOF', 'AR-LOF', 'AD-LOF', 'AD-GOF', 'ADAR-LOF', 'ADAR-GOF']
     k = 0
@@ -199,8 +292,15 @@ global classifier_space
 classifier_space = [GaussianNB(), 
                     RandomForestClassifier(min_samples_split=5, n_jobs=-1), # was 2, 5
                     LogisticRegression(n_jobs=-1)]
+
+#classifier_space = [None,
+#                    GaussianNB(),
+#                    RandomForestClassifier(min_samples_split=5, n_jobs=-1), # was 2, 5
+#                    LogisticRegression(n_jobs=-1)]
 global clf_names 
-clf_names = ["Gaussian NB", "Random Forest", "Logistic Regression"]
+clf_names = [
+        #"Class Reweighted kNN", 
+        "Gaussian NB", "Random Forest", "Logistic Regression"]
 
 def one_gene_clf(X, y, path_name_in_df, roc_type, multi_class,average):
     # one gene train/test -- use the knn_and_roc function

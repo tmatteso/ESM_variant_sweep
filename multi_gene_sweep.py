@@ -45,6 +45,10 @@ def read_and_split(RECT_DF_LOCATION_ls, DELTA_EMBEDDINGS_ls, VAE_EMBEDDINGS_ls, 
     # all of these need to have a new arg split at the end with the train test split
     print("LLR-KNN ROC-AUC:",  special_knn(None, y, split=(X_train.reshape(X_train.shape[0], 1), y_train, 
                                                               X_test.reshape(X_test.shape[0], 1), y_test )))
+    print(classifier_full_split(X.reshape(X.shape[0], 1), y), "new code")
+    print(classifier_full_split(X.reshape(X.shape[0], 1), y, classifier=0), "new code gnb")
+    raise Error
+
     # define X and y for the esm roc-auc calc
     X = np.stack(X_and_ys[0].repr.values) #.reshape(X_and_ys[0]["LLR"].to_numpy().shape[0], 1)
     y = X_and_ys[1].to_numpy()
