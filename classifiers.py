@@ -7,16 +7,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.neighbors import NearestNeighbors
 
-# then I think a refactor is in order for special knn and knn_and_roc
-# the changes you made to make refactor work are pretty atrocious
-# no more than nesting 2 loops or 2 conditionals at a time, and only 3 total if trying both
-# need more subroutines, functions have become too large
-# optimal function size for me is 10<=x=<50 lines
-
-
-
-
-
 def special_knn_sep(class_weights, X_train, X_test, y_train, y_test):
     # this part is boiler plate for any knn
     if len(y_train) < 10:
@@ -34,10 +24,15 @@ def special_knn_sep(class_weights, X_train, X_test, y_train, y_test):
     return unique_elements[np.argmax(class_votes)]
 
 def special_knn_2d(class_weights, X_train, X_test, y_train, y_test):
+    #print("in the special knn")
+    #print(X_train.shape, "X train")
+    #print(X_test.shape, "X test")
+    #print(y_train.shape, "y train")
+    #print(y_test.shape, " y test")
     knn = NearestNeighbors(n_neighbors=10)
     pred_ls = []
     unique_elements, counts = np.unique(y_train, return_counts=True)
-    knn.fit(X_train, y_train) # not using anything held out 
+    knn.fit(X_train, y_train)  
     # now get the nearest neighbors out, based on the test_X query
     neighbors = knn.kneighbors(X_test, return_distance=False)
     # should be np array, check for shape here
@@ -86,24 +81,42 @@ def classifier_LOO(X,y, classifier=None):
 # test this with the other clfs in query.py
 
 # clf with full split precomputed
-def classifier_full_split(X, y, classifier=None):
+def classifier_full_split(X, y, X_train, X_test, y_train, y_test, classifier=None):
     # calculate class proportions and use for reweighting
     pred_ls = []
     unique_elements, counts = np.unique(y, return_counts=True)
     total = sum(counts)
     class_weights = [1 - counts[i]/total for i in range(len(counts))]
-    # split into train and test
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
+    # split into train and test pass it in, need to keep const between clfs
+    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
     # now perform the classification task
+    #print(X_train.shape, "X train")
+    #print(X_test.shape, "X test")
+    #print(y_train.shape, "y train")
+    #print(y_test.shape, " y test")
     if classifier == None:
         predictions = special_knn_2d(class_weights, X_train, X_test, y_train, y_test)
     else:
         predictions = other_clf_sep(classifier, X_train, X_test, y_train, y_test)
-    print(y_test.shape)
-    print(predictions.shape)
     return roc_auc_score(y_test, predictions)
 
-# now test this one
+# now write a function that takes one of these functions and applies it over the classifier space
+def over_clf_space(X, y, func_name):
+    for i in range(len(classifier_space)):
+        if func_name== "classifier_LOO":
+            roc_auc = classifier_LOO(X,y, classifier =i)
+        else: # classifier_full_split
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42) # need to keep const
+            roc_auc = classifier_full_split(X,y,X_train, X_test, y_train, y_test, classifier =i)
+        print(roc_auc)
+
+def one_gene_clf(X, y, path_name_in_df, roc_type, multi_class,average):
+    # one gene train/test -- use the knn_and_roc function
+    # do wrt to both label sets -- needs to be passed in
+    # I think we should just pass around the clf index, rather than the object itself
+    for i in range(len(classifier_space)):
+        # make sure the print statement says which classifier it is
+        get_all_roc(X, y, path_name_in_df, roc_type, multi_class, average, classifier=i)
 
 def special_knn(X, y, split=None):
     # calculate class proportions and use for reweighting
@@ -296,10 +309,10 @@ classifier_space = [GaussianNB(),
 #classifier_space = [None,
 #                    GaussianNB(),
 #                    RandomForestClassifier(min_samples_split=5, n_jobs=-1), # was 2, 5
-#                    LogisticRegression(n_jobs=-1)]
+#                   LogisticRegression(n_jobs=-1)]
 global clf_names 
 clf_names = [
-        #"Class Reweighted kNN", 
+#        "Class Reweighted kNN", 
         "Gaussian NB", "Random Forest", "Logistic Regression"]
 
 def one_gene_clf(X, y, path_name_in_df, roc_type, multi_class,average):
