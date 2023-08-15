@@ -101,14 +101,16 @@ def classifier_full_split(X, y, X_train, X_test, y_train, y_test, classifier=Non
     return roc_auc_score(y_test, predictions)
 
 # now write a function that takes one of these functions and applies it over the classifier space
-def over_clf_space(X, y, func_name):
+def over_clf_space(X, y, func_name, train_test_tuple):
+    roc_auc_arr = []
     for i in range(len(classifier_space)):
         if func_name== "classifier_LOO":
             roc_auc = classifier_LOO(X,y, classifier =i)
         else: # classifier_full_split
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42) # need to keep const
+            X_train, X_test, y_train, y_test = train_test_tuple
             roc_auc = classifier_full_split(X,y,X_train, X_test, y_train, y_test, classifier =i)
-        print(roc_auc)
+        roc_auc_arr.append(roc_auc)
+    return roc_auc_arr
 
 def one_gene_clf(X, y, path_name_in_df, roc_type, multi_class,average):
     # one gene train/test -- use the knn_and_roc function
