@@ -121,10 +121,8 @@ def create_LLR_fasta(input_df, filepath, write=False):
 
 def create_ESM_fasta(input_df, filepath, write=False, short=True):
     # write the file if needed, otherwise return the appropriate dataframe
-    
-    
     if short:
-        human_assays_only = unique_mut_seqs[unique_mut_seqs.gene.str.contains("HUMAN")]
+        human_assays_only = input_df[input_df.gene.str.contains("HUMAN")]
         unique_human_muts = (human_assays_only[["gene", "mutated_sequence"]].drop_duplicates()) # 187997 seqs. easy
         # so take this indices and 
         unique_human_muts = human_assays_only.loc[unique_human_muts.index][["gene", "mutant", "mutated_sequence"]]
