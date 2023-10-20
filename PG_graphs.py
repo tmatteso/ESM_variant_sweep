@@ -26,6 +26,8 @@ def get_SM_PG(filter_str):
         df = pd.read_csv(file)
         df["assay"] = file.split("/")[1]
         df.mutant = df.mutant.unique()
+        print(file)
+        raise Error
         # bake in the gene name as a column
         df["gene"] = file.split("/")[1].split("_")[0] + "_" + file.split("/")[1].split("_")[1]
         try:
@@ -150,7 +152,7 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
                      ESM_run=True, LLR_run=True, folder=False, 
                      esm_model="esm1b_t33_650M_UR50S", embed_type="mean", repr_layers=33):
     all_sm = get_SM_PG(filter_str)
-    print(all_sm, len(all_sm.assay.unique()))
+    print(all_sm, all_sm.columns) #len(all_sm.assay.unique()))
     unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
