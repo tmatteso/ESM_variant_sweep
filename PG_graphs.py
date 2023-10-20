@@ -27,6 +27,7 @@ def get_SM_PG(filter_str):
         df["assay"] = file.split("/")[1]
         df.mutant = df.mutant.unique()
         print(file)
+        print(file.split("/")[1].split("_")[0] + "_" + file.split("/")[1].split("_")[1])
         raise Error
         # bake in the gene name as a column
         df["gene"] = file.split("/")[1].split("_")[0] + "_" + file.split("/")[1].split("_")[1]
