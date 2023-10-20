@@ -164,9 +164,9 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
     print(unique_mut_seqs)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
-    if not ESM_run:
-        cmd =f"python3 extract.py {esm_model} {ESM_fasta_name} {ESM_dir_name} --repr_layers {repr_layers} --include {embed_type}"
-        run_sh_command(cmd)
+#     if not ESM_run:
+#         cmd =f"python3 extract.py {esm_model} {ESM_fasta_name} {ESM_dir_name} --repr_layers {repr_layers} --include {embed_type}"
+#         run_sh_command(cmd)
     data_dict = read_in_pt(ESM_dir_name, folder=folder)
     print(data_dict)
     #print(data_dict)
