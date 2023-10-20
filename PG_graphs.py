@@ -119,10 +119,18 @@ def create_LLR_fasta(input_df, filepath, write=False):
     # write the file if needed, otherwise return the appropriate dataframe
     return subset
 
-def create_ESM_fasta(input_df, filepath, write=False):
+def create_ESM_fasta(input_df, filepath, write=False, short=True):
     # write the file if needed, otherwise return the appropriate dataframe
     unique_mut_seqs = input_df[['gene', 'mutated_sequence']].drop_duplicates()
-    unique_mut_seqs["seq_ID"] = [ i for i in range(len(unique_mut_seqs))]
+    if short:
+        unique_human_muts = (human_assays_only[["gene", "mutated_sequence"]].drop_duplicates()) # 187997 seqs. easy
+        # so take this indices and 
+        unique_human_muts = human_assays_only.loc[unique_human_muts.index][["gene", "mutant", "mutated_sequence"]]
+        unique_human_muts["seq_ID"] = [ i for i in range(len(unique_human_muts))]
+        # this will eliminate long sequences -- only the slice ones will have this nomenclature.
+        unique_human_muts = unique_human_muts[unique_human_muts.mutated_sequence.str.len() <= 1022]
+    else: 
+        unique_mut_seqs["seq_ID"] = [ i for i in range(len(unique_mut_seqs))]
     if write:
         with open(filepath, 'w') as f: # 'All_SM_PG_esm.fasta'
             for index, row in unique_mut_seqs.iterrows():
@@ -150,25 +158,25 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
                      ESM_run=True, LLR_run=True, folder=False, 
                      esm_model="esm1b_t33_650M_UR50S", embed_type="mean", repr_layers=33):
     all_sm = get_SM_PG(filter_str)
-    print(all_sm) #len(all_sm.assay.unique()))
-    print(all_sm.head())
-    print(all_sm.assay.unique())
-    raise Error
+    print(all_sm)
     unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run)
+    print(unique_mut_seqs)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
     if not ESM_run:
         cmd =f"python3 extract.py {esm_model} {ESM_fasta_name} {ESM_dir_name} --repr_layers {repr_layers} --include {embed_type}"
         run_sh_command(cmd)
     data_dict = read_in_pt(ESM_dir_name, folder=folder)
-    
+    print(data_dict)
     #print(data_dict)
     subset = create_LLR_fasta(all_sm, LLR_fasta_name,)# not LLR_run) # if LLR_run is false, write the fasta
-    print(4)
+    print(subset)
     # there must be a conditional to know if the LLR script has been run -- otherwise LLR_csv does not exist
     # make the LLR name
     stub = LLR_fasta_name.split(".")[0]
     LLR_csv = f"{stub}_LLR.csv"
+    print(LLR_csv)
+    raise Error
 #     if not LLR_run:
 #         cmd = f"python3 esm-variants/esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
 #         run_sh_command(cmd)
