@@ -24,7 +24,7 @@ def get_SM_PG(filter_str):
     for file in filtered_files:
         # read in file
         df = pd.read_csv(file)
-        df["assay"] = file.split("/")[1]
+        df["assay"] = file.split("/")[-1]
         df.mutant = df.mutant.unique()
         # bake in the gene name as a column
         df["gene"] = file.split("/")[-1].split("_")[0] + "_" + file.split("/")[-1].split("_")[1]
