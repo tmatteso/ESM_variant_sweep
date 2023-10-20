@@ -99,6 +99,8 @@ def read_in_pt(filepath, folder=False):
         for file in all_files:
             # Load the PyTorch tensor
             dic = torch.load(file)
+            print(dic)
+            raise Error
             # looks like {'label': '0_A24C', 'sliced_representations': {2: tensor([-0.7361, ..., 0.0608])}}
             data_dict[dic['label']] = dic['sliced_representations']
         # Save the dictionary as a .npy file
