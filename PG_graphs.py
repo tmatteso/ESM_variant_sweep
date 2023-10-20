@@ -150,8 +150,8 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
                      ESM_run=True, LLR_run=True, folder=False, 
                      esm_model="esm1b_t33_650M_UR50S", embed_type="mean", repr_layers=33):
     all_sm = get_SM_PG(filter_str)
-    print(all_sm, len(all_sm[all_sm.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
-    unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name, not ESM_run)
+    print(all_sm, len(all_sm.assay.unique()))
+    unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
     if not ESM_run:
@@ -160,15 +160,15 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
     data_dict = read_in_pt(ESM_dir_name, folder=folder)
     
     #print(data_dict)
-    subset = create_LLR_fasta(all_sm, LLR_fasta_name, not LLR_run) # if LLR_run is false, write the fasta
+    subset = create_LLR_fasta(all_sm, LLR_fasta_name,)# not LLR_run) # if LLR_run is false, write the fasta
     print(4)
     # there must be a conditional to know if the LLR script has been run -- otherwise LLR_csv does not exist
     # make the LLR name
     stub = LLR_fasta_name.split(".")[0]
     LLR_csv = f"{stub}_LLR.csv"
-    if not LLR_run:
-        cmd = f"python3 esm-variants/esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
-        run_sh_command(cmd)
+#     if not LLR_run:
+#         cmd = f"python3 esm-variants/esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
+#         run_sh_command(cmd)
     all_sm_LLR = load_LLR_scores(LLR_csv, subset, all_sm)
     print(all_sm_LLR, len(all_sm_LLR[all_sm_LLR.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
     print(5)
@@ -570,12 +570,6 @@ def create_parser():
         default=33,# make an edge case to accomodate the full mutation space, make "full" 
         choices=[2, 9, 21, 33],
         help="Tells the pipeline which layer the ESM embedding is extracted from. By default is 33.",
-    )
-    parser.add_argument( # ["llr_only, "llr_pos", "clinvar_only", "all"]
-        "--esm_embed_dir",
-        type=str,
-        default="None",
-        help="Tells the pipeline which directory to take the esm embeddings from. Assumes None by default.",
     )
     parser.add_argument( # number of random mutations to augment all point missense clinvar mutations 
         "--assay_dir",
