@@ -89,7 +89,7 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm):
     all_sm_with_esm = pd.merge(all_sm, esm_embeds_with_genes, on=['gene', 'mutated_sequence']) # this is sufficient :)
     return all_sm_with_esm
 
-def read_in_pt(filepath, folder=False):
+def read_in_pt(filepath, folder=False, embed_type):
     # if full object not here:
     if folder:
         # given dir, read in as big dictionary -- needs glob
@@ -99,10 +99,11 @@ def read_in_pt(filepath, folder=False):
         for file in all_files:
             # Load the PyTorch tensor
             dic = torch.load(file)
-            print(dic)
-            raise Error
-            # looks like {'label': '0_A24C', 'sliced_representations': {2: tensor([-0.7361, ..., 0.0608])}}
-            data_dict[dic['label']] = dic['sliced_representations']
+            if embed_type == "mean":
+                data_dict[dic['label']] = dic['mean_representations']
+            else:
+                # looks like {'label': '0_A24C', 'sliced_representations': {2: tensor([-0.7361, ..., 0.0608])}}
+                data_dict[dic['label']] = dic['sliced_representations']
         # Save the dictionary as a .npy file
         np.save(f"{filepath}.npy", data_dict)
     # else read in the full object:
