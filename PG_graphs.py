@@ -89,7 +89,7 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm):
     all_sm_with_esm = pd.merge(all_sm, esm_embeds_with_genes, on=['gene', 'mutated_sequence']) # this is sufficient :)
     return all_sm_with_esm
 
-def read_in_pt(filepath, folder=False, embed_type):
+def read_in_pt(filepath, embed_type, folder=False):
     # if full object not here:
     if folder:
         # given dir, read in as big dictionary -- needs glob
@@ -170,7 +170,7 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
 #     if not ESM_run:
 #         cmd =f"python3 extract.py {esm_model} {ESM_fasta_name} {ESM_dir_name} --repr_layers {repr_layers} --include {embed_type}"
 #         run_sh_command(cmd)
-    data_dict = read_in_pt(ESM_dir_name, folder=folder)
+    data_dict = read_in_pt(ESM_dir_name, embed_type, folder=folder)
     print(data_dict)
     #print(data_dict)
     subset = create_LLR_fasta(all_sm, LLR_fasta_name,)# not LLR_run) # if LLR_run is false, write the fasta
