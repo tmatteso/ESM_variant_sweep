@@ -126,17 +126,17 @@ def create_ESM_fasta(input_df, filepath, write=False, short=True):
     # write the file if needed, otherwise return the appropriate dataframe
     if short:
         human_assays_only = input_df[input_df.gene.str.contains("HUMAN")]
-        print(human_assays_only, 1)
+        #print(human_assays_only, 1)
         unique_human_muts = (human_assays_only[["gene", "mutated_sequence"]].drop_duplicates()) # 187997 seqs. easy
-        print(unique_human_muts, 2)
+        #print(unique_human_muts, 2)
         # so take this indices and 
         unique_mut_seqs = human_assays_only.loc[unique_human_muts.index][["gene", "mutant", "mutated_sequence"]]
-        print(unique_human_muts, 3)
+        #print(unique_human_muts, 3)
         unique_human_muts["seq_ID"] = [ i for i in range(len(unique_human_muts))]
         # this will eliminate long sequences -- only the slice ones will have this nomenclature.
         unique_mut_seqs = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
-        print(unique_human_muts, 4)
-        raise Error
+        #print(unique_human_muts, 4)
+        #raise Error
     else: 
         unique_mut_seqs = input_df[['gene', 'mutated_sequence']].drop_duplicates()
         unique_mut_seqs["seq_ID"] = [ i for i in range(len(unique_mut_seqs))]
@@ -184,11 +184,11 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
     # make the LLR name
     stub = LLR_fasta_name.split(".")[0]
     LLR_csv = f"{stub}_LLR.csv"
-    print(LLR_csv)
+    print(LLR_csv, LLR_run)
     raise Error
-#     if not LLR_run:
-#         cmd = f"python3 esm-variants/esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
-#         run_sh_command(cmd)
+    if not LLR_run:
+        cmd = f"python3 esm-variants/esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
+        run_sh_command(cmd)
     all_sm_LLR = load_LLR_scores(LLR_csv, subset, all_sm)
     print(all_sm_LLR, len(all_sm_LLR[all_sm_LLR.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
     print(5)
