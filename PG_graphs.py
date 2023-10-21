@@ -171,7 +171,7 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
 #         cmd =f"python3 extract.py {esm_model} {ESM_fasta_name} {ESM_dir_name} --repr_layers {repr_layers} --include {embed_type}"
 #         run_sh_command(cmd)
     data_dict = read_in_pt(ESM_dir_name, embed_type, folder=folder)
-    print(data_dict)
+    #print(data_dict)
     #print(data_dict)
     subset = create_LLR_fasta(all_sm, LLR_fasta_name,)# not LLR_run) # if LLR_run is false, write the fasta
     print(subset)
