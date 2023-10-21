@@ -126,7 +126,9 @@ def create_ESM_fasta(input_df, filepath, write=False, short=True):
     # write the file if needed, otherwise return the appropriate dataframe
     if short:
         human_assays_only = input_df[input_df.gene.str.contains("HUMAN")]
+        print(human_assays_only)
         unique_human_muts = (human_assays_only[["gene", "mutated_sequence"]].drop_duplicates()) # 187997 seqs. easy
+        print(unique_human_muts)
         # so take this indices and 
         unique_human_muts = human_assays_only.loc[unique_human_muts.index][["gene", "mutant", "mutated_sequence"]]
         unique_human_muts["seq_ID"] = [ i for i in range(len(unique_human_muts))]
