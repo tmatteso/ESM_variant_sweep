@@ -93,7 +93,9 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     print("unique_mut_seqs", unique_mut_seqs) # it doesn't go down much at all
     unique_mut_seqs = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
     indices = unique_mut_seqs[["gene", "mutated_sequence"]].drop_duplicates()
-    unique_mut_seqs = unique_mut_seqs.loc[indices.index]
+    unique_mut_seqs = unique_mut_seqs.loc[unique_mut_seqs.index.intersection(
+            indices.index)][["gene", "mutant", "mutated_sequence"]]
+    #unique_mut_seqs = unique_mut_seqs.loc[indices.index]
     # why do we still have too many unique_mut_seqs?
     print("unique_mut_seqs", unique_mut_seqs)
     raise Error
