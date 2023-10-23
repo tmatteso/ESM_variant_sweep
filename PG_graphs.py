@@ -71,6 +71,9 @@ def load_LLR_scores(LLR_csv, subset, all_sm):
     LLR = pd.read_csv(LLR_csv)
     LLR = LLR.rename(columns={'seq_id': 'seq_ID' }, inplace=False)
     # join on seqID with subset df
+    print(LLR)
+    print(subset)
+    raise Error
     LLR['seq_ID'] = LLR['seq_ID'].astype('int64')
     subset['seq_ID'] = subset['seq_ID'].astype('int64')
     all_WT_LLR = pd.merge(subset, LLR, on=['seq_ID']) 
