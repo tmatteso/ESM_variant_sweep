@@ -196,9 +196,9 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
                      ESM_run=True, LLR_run=True, folder=False, 
                      esm_model="esm1b_t33_650M_UR50S", embed_type="mean", repr_layers=33):
     all_sm = get_SM_PG(filter_str)
-    print(all_sm)
+    print("all_sm", all_sm)
     unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run) # this is 266260
-    print(unique_mut_seqs)
+    print("unique_mut_seqs", unique_mut_seqs)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
 #     if not ESM_run:
