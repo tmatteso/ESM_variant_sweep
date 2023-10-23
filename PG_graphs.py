@@ -161,7 +161,7 @@ def create_ESM_fasta(input_df, filepath, write=False, short=True):
         unique_mut_seqs = human_assays_only.loc[human_assays_only.index.intersection(
             unique_human_muts.index)][["gene", "mutant", "mutated_sequence"]]
         print(unique_mut_seqs, 4)
-        unique_mut_seqs = human_assays_only.loc[unique_human_muts.index] #[["gene", "mutant", "mutated_sequence"]]
+        #unique_mut_seqs = human_assays_only.loc[unique_human_muts.index] #[["gene", "mutant", "mutated_sequence"]]
         unique_mut_seqs["seq_ID"] = [ i for i in range(len(unique_mut_seqs))]
         # this will eliminate long sequences -- only the slice ones will have this nomenclature.
         unique_mut_seqs = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
