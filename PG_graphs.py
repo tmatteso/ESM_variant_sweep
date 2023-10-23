@@ -88,10 +88,16 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     esm_embeds = esm_embeds.rename(columns={layer_num: 'esm_embed' }, inplace=False)
     # drop all other columns
     esm_embeds = esm_embeds[["seq_ID", 'esm_embed']]
+    print("esm_embeds", esm_embeds)
     # now merged based on index
     esm_embeds_with_genes = pd.merge(unique_mut_seqs, esm_embeds, on=['seq_ID'])
+    print("esm_embeds_with_genes", esm_embeds_with_genes)
+    # may need to check here, our variant count ahs gone up alot
     # now we go from all unique esm embeds to all entries in the original df: all_sm
     all_sm_with_esm = pd.merge(all_sm, esm_embeds_with_genes, on=['gene', 'mutated_sequence']) # this is sufficient :)
+    print("all_sm_with_esm", all_sm_with_esm)
+    raise Error
+    # these things have way more variants than they should
     return all_sm_with_esm
 
 def read_in_pt(filepath, embed_type, folder=False):
@@ -368,6 +374,8 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
             subset.append(assay)
     unique_assays = subset
     print("number of assays:", len(unique_assays))
+    assay_sizes = [len(human_assays_only[human_assays_only['assay'] == assay].index) for assay in unique_assays]
+    [print(unique_assays[as_i], assay_sizes[as_i]) for as_i in unique_assays]
     # need to score across assays
     for_graphs = {key: [[] for i in range(len(unique_assays))] for key in splits}
     # keep track of assay order
