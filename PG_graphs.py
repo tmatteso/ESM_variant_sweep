@@ -83,6 +83,8 @@ def load_LLR_scores(LLR_csv, subset, all_sm):
 def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm):
     esm_embeds = pd.DataFrame.from_dict(loaded_data, orient='index')
     esm_embeds["seq_ID"] = esm_embeds.index.astype('int64')
+    print(esm_embeds.columns)
+    raise Error
     # needs to be made flexible for whatever layer does the embedding
     # we remove this now, so we can accomodate several columns at once
     #esm_embeds = esm_embeds.rename(columns={33: 'esm_embed' }, inplace=False)
