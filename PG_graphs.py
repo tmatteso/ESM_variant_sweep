@@ -90,6 +90,7 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     esm_embeds = esm_embeds[["seq_ID", 'esm_embed']]
     print("esm_embeds", esm_embeds)
     # there must be a big problem here that is causing me to loose many embeddings
+    unique_mut_seqs = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
     print("unique_mut_seqs", unique_mut_seqs)
     raise Error
     # now merged based on index
@@ -100,6 +101,7 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     # now we go from all unique esm embeds to all entries in the original df: all_sm
     # somehow this goes from 193752 to 952302. This does not make sense.
     print("all_sm", all_sm) # there are likely duplicates in all_sm
+    
     indices = esm_embeds_with_genes[["gene", "mutated_sequence"]].drop_duplicates()
     esm_embeds_with_genes = esm_embeds_with_genes.loc[indices.index]
     indices = all_sm[["gene", "mutated_sequence"]].drop_duplicates()
