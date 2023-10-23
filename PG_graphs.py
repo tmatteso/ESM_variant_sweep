@@ -646,9 +646,9 @@ def main():
         human_assays_only = human_assays_only.rename(columns={args.layer_num: 'esm_embed' }, inplace=False)
         # now we perform the splits and train the estimators
         #splits = [0.1, 0.3, 0.5, 0.8, 
-        splits = [10, 25, 50, 100, 250, 500]
+        splits = [10, 25, 50, 100, 250, 500, 1000]
         seed_number = 20
-        threshold = 625# 313 # this allows 500 train points while still having 20% to validate on
+        threshold = 1250#625# 313 # this allows 500 train points while still having 20% to validate on
         # okay still need LLR direct and some knn ones in here
         # estimator list should be specified here
         categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list)
