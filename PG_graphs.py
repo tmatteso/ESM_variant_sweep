@@ -82,7 +82,7 @@ def load_LLR_scores(LLR_csv, subset, all_sm):
 
 def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     esm_embeds = pd.DataFrame.from_dict(loaded_data, orient='index')
-    esm_embeds["seq_ID"] = esm_embeds.index.astype('int64')
+    esm_embeds["seq_ID"] = esm_embeds.index.astype('int64') # this is only 187997
     # needs to be made flexible for whatever layer does the embedding
     # we remove this now, so we can accomodate several columns at once
     esm_embeds = esm_embeds.rename(columns={layer_num: 'esm_embed' }, inplace=False)
@@ -90,7 +90,11 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     esm_embeds = esm_embeds[["seq_ID", 'esm_embed']]
     print("esm_embeds", esm_embeds)
     # there must be a big problem here that is causing me to loose many embeddings
+    print("unique_mut_seqs", unique_mut_seqs) # it doesn't go down much at all
     unique_mut_seqs = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
+    indices = unique_mut_seqs[["gene", "mutated_sequence"]].drop_duplicates()
+    unique_mut_seqs = unique_mut_seqs.loc[indices.index]
+    # why do we still have too many unique_mut_seqs?
     print("unique_mut_seqs", unique_mut_seqs)
     raise Error
     # now merged based on index
@@ -191,7 +195,7 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
                      esm_model="esm1b_t33_650M_UR50S", embed_type="mean", repr_layers=33):
     all_sm = get_SM_PG(filter_str)
     print(all_sm)
-    unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run)
+    unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run) # this is 266260
     print(unique_mut_seqs)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
