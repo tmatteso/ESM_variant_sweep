@@ -377,7 +377,7 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
     unique_assays = subset
     print("number of assays:", len(unique_assays))
     assay_sizes = [len(human_assays_only[human_assays_only['assay'] == assay].index) for assay in unique_assays]
-    [print(unique_assays[as_i], assay_sizes[as_i]) for as_i in unique_assays]
+    [print(unique_assays[as_i], assay_sizes[as_i]) for as_i in range(len(unique_assays))]
     # need to score across assays
     for_graphs = {key: [[] for i in range(len(unique_assays))] for key in splits}
     # keep track of assay order
