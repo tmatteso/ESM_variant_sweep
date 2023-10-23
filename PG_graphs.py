@@ -429,7 +429,7 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
                     arr = np.zeros_like(arr)
                 for_graphs[k][as_i].append(arr)
         # convert to np arrays, account for N < 500 for an assay
-    #print(for_graphs) # fraction: [assay[estimator]]
+        print(categories, for_graphs) # fraction: [assay[estimator]]
     # these definitely should get saved somehow. Generating this is a pain.
     return categories, for_graphs
 
@@ -649,7 +649,7 @@ def main():
         #splits = [0.1, 0.3, 0.5, 0.8, 
         splits = [10, 25, 50, 100, 250, 500, 1000]
         seed_number = 20
-        threshold = 13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
+        threshold = 1250#1250#625# 313 # this allows 500 train points while still having 20% to validate on
         # okay still need LLR direct and some knn ones in here
         # estimator list should be specified here
         categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list)
