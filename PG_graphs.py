@@ -187,8 +187,8 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
     LLR_csv = f"{stub}_LLR.csv"
     print(LLR_csv, LLR_run) # I think we were wondering if a suitable csv exists
     
-    if not LLR_run:
-        cmd = f"python3 esm-variants/esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
+    if not LLR_run: # was esm-variants/esm_score_missense_mutations.py
+        cmd = f"python3 esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
         run_sh_command(cmd)
     all_sm_LLR = load_LLR_scores(LLR_csv, subset, all_sm)
     print(all_sm_LLR, len(all_sm_LLR[all_sm_LLR.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
