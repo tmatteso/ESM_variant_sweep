@@ -98,7 +98,7 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     #unique_mut_seqs = unique_mut_seqs.loc[indices.index]
     # why do we still have too many unique_mut_seqs?
     print("unique_mut_seqs", unique_mut_seqs)
-    raise Error
+    #raise Error
     # now merged based on index
     # we went from 226593 to 193752 here
     esm_embeds_with_genes = pd.merge(unique_mut_seqs, esm_embeds, on=['seq_ID'])
@@ -158,8 +158,8 @@ def create_ESM_fasta(input_df, filepath, write=False, short=True):
         unique_human_muts = (human_assays_only[["gene", "mutated_sequence"]].drop_duplicates()) # 187997 seqs. easy
         print(unique_human_muts, 2)
         # so take this indices and 
-        unique_mut_seqs = human_assays_only.loc[human_assays_only.index.intersection(
-            unique_human_muts.index)][["gene", "mutant", "mutated_sequence"]]
+        #unique_mut_seqs = human_assays_only.loc[human_assays_only.index.intersection(
+        #    unique_human_muts.index)][["gene", "mutant", "mutated_sequence"]]
         #unique_mut_seqs = human_assays_only.loc[unique_human_muts.index] #[["gene", "mutant", "mutated_sequence"]]
         unique_mut_seqs["seq_ID"] = [ i for i in range(len(unique_mut_seqs))]
         # this will eliminate long sequences -- only the slice ones will have this nomenclature.
@@ -197,7 +197,7 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
                      esm_model="esm1b_t33_650M_UR50S", embed_type="mean", repr_layers=33):
     all_sm = get_SM_PG(filter_str)
     print("all_sm", all_sm)
-    unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run) # this is 266260
+    unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run) # this is 266260 -- should be 187997 to match on seqid?
     print("unique_mut_seqs", unique_mut_seqs)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
