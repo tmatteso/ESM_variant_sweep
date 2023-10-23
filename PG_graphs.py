@@ -649,7 +649,7 @@ def main():
         #splits = [0.1, 0.3, 0.5, 0.8, 
         splits = [10, 25, 50, 100, 250, 500, 1000]
         seed_number = 20
-        threshold = 1250#625# 313 # this allows 500 train points while still having 20% to validate on
+        threshold = 13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
         # okay still need LLR direct and some knn ones in here
         # estimator list should be specified here
         categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list)
