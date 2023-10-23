@@ -165,15 +165,16 @@ def create_ESM_fasta(input_df, filepath, write=False, short=True):
         # this will eliminate long sequences -- only the slice ones will have this nomenclature.
         unique_mut_seqs = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
         print(unique_human_muts, 4)
+        return unique_mut_seqs
         #raise Error
 #     else: 
 #         unique_mut_seqs = input_df[['gene', 'mutated_sequence']].drop_duplicates()
 #         unique_mut_seqs["seq_ID"] = [ i for i in range(len(unique_mut_seqs))]
-    if write:
-        with open(filepath, 'w') as f: # 'All_SM_PG_esm.fasta'
-            for index, row in unique_mut_seqs.iterrows():
-                f.write(f">{row['seq_ID']}\n")
-                f.write(f"{row['mutated_sequence']}\n")
+#     if write:
+#         with open(filepath, 'w') as f: # 'All_SM_PG_esm.fasta'
+#             for index, row in unique_mut_seqs.iterrows():
+#                 f.write(f">{row['seq_ID']}\n")
+#                 f.write(f"{row['mutated_sequence']}\n")
     return unique_mut_seqs
 
 def run_sh_command(command):
