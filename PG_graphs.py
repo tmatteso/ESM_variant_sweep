@@ -69,6 +69,7 @@ def load_LLR_scores(LLR_csv, subset, all_sm):
     # now match the LLRs to the WT sequences
     # perform the prediction for the DMS assay
     LLR = pd.read_csv(LLR_csv)
+    # the ids that were used to generate the fasta are wrong
     LLR = LLR.rename(columns={'seq_id': 'seq_ID' }, inplace=False)
     # join on seqID with subset df
     print(LLR)
@@ -184,7 +185,7 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
     data_dict = read_in_pt(ESM_dir_name, embed_type, folder=folder)
     #print(data_dict)
     #print(data_dict)
-    subset = create_LLR_fasta(all_sm, LLR_fasta_name,)# not LLR_run) # if LLR_run is false, write the fasta
+    subset = create_LLR_fasta(all_sm, LLR_fasta_name, write=True)# not LLR_run) # if LLR_run is false, write the fasta
     print(subset)
     # there must be a conditional to know if the LLR script has been run -- otherwise LLR_csv does not exist
     # make the LLR name
