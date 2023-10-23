@@ -80,14 +80,14 @@ def load_LLR_scores(LLR_csv, subset, all_sm):
     all_sm_LLR = pd.merge(all_sm, all_WT_LLR, on=['gene', 'mutant', 'WT_sequence'])
     return all_sm_LLR
 
-def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm):
+def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     esm_embeds = pd.DataFrame.from_dict(loaded_data, orient='index')
     esm_embeds["seq_ID"] = esm_embeds.index.astype('int64')
-    print(esm_embeds.columns)
-    raise Error
     # needs to be made flexible for whatever layer does the embedding
     # we remove this now, so we can accomodate several columns at once
-    #esm_embeds = esm_embeds.rename(columns={33: 'esm_embed' }, inplace=False)
+    esm_embeds = esm_embeds.rename(columns={layer_num: 'esm_embed' }, inplace=False)
+    # drop all other columns
+    esm_embeds = esm_embeds[["seq_ID", 'esm_embed']]
     # now merged based on index
     esm_embeds_with_genes = pd.merge(unique_mut_seqs, esm_embeds, on=['seq_ID'])
     # now we go from all unique esm embeds to all entries in the original df: all_sm
@@ -197,7 +197,7 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
     all_sm_LLR = load_LLR_scores(LLR_csv, subset, all_sm)
     print(all_sm_LLR, len(all_sm_LLR[all_sm_LLR.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
     print(5)
-    all_sm_with_LLR_and_ESM = load_ESM_embeds(data_dict, unique_mut_seqs, all_sm_LLR)
+    all_sm_with_LLR_and_ESM = load_ESM_embeds(data_dict, unique_mut_seqs, all_sm_LLR, repr_layers)
     print(all_sm_with_LLR_and_ESM)
     print(6)
     # now subset on Human only?
