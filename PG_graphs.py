@@ -186,15 +186,15 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
     stub = LLR_fasta_name.split(".")[0]
     LLR_csv = f"{stub}_LLR.csv"
     print(LLR_csv, LLR_run) # I think we were wondering if a suitable csv exists
-    
-    if not LLR_run: # was esm-variants/esm_score_missense_mutations.py
-        cmd = f"python3 esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
-        run_sh_command(cmd)
+    #if not LLR_run: # was esm-variants/esm_score_missense_mutations.py
+       # cmd = f"python3 esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
+        #run_sh_command(cmd)
     all_sm_LLR = load_LLR_scores(LLR_csv, subset, all_sm)
     print(all_sm_LLR, len(all_sm_LLR[all_sm_LLR.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
     print(5)
-    raise Error
     all_sm_with_LLR_and_ESM = load_ESM_embeds(data_dict, unique_mut_seqs, all_sm_LLR)
+    print(all_sm_with_LLR_and_ESM)
+    print(6)
     # now subset on Human only?
     all_sm_with_LLR_and_ESM = all_sm_with_LLR_and_ESM[all_sm_with_LLR_and_ESM.gene.str.contains("HUMAN")]
     # must happen after adding the ESM embeddings due to the nature of the fasta that generated this. Very dumb.
