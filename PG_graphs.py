@@ -99,7 +99,6 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     print(all_sm) # there are likely duplicates in all_sm
     all_sm_with_esm = pd.merge(all_sm, esm_embeds_with_genes, on=['gene', 'mutant', 'mutated_sequence']) # this is sufficient :)
     print("all_sm_with_esm", all_sm_with_esm)
-    raise Error
     # these things have way more variants than they should
     return all_sm_with_esm
 
