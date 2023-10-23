@@ -89,6 +89,9 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     # drop all other columns
     esm_embeds = esm_embeds[["seq_ID", 'esm_embed']]
     print("esm_embeds", esm_embeds)
+    # there must be a big problem here that is causing me to loose many embeddings
+    print("unique_mut_seqs", unique_mut_seqs)
+    raise Error
     # now merged based on index
     # we went from 226593 to 193752 here
     esm_embeds_with_genes = pd.merge(unique_mut_seqs, esm_embeds, on=['seq_ID'])
