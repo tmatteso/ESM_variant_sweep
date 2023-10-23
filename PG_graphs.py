@@ -90,10 +90,13 @@ def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     esm_embeds = esm_embeds[["seq_ID", 'esm_embed']]
     print("esm_embeds", esm_embeds)
     # now merged based on index
+    # we went from 226593 to 193752 here
     esm_embeds_with_genes = pd.merge(unique_mut_seqs, esm_embeds, on=['seq_ID'])
     print("esm_embeds_with_genes", esm_embeds_with_genes)
     # may need to check here, our variant count ahs gone up alot
     # now we go from all unique esm embeds to all entries in the original df: all_sm
+    # somehow this goes from 193752 to 952302. This does not make sense.
+    print(all_sm)
     all_sm_with_esm = pd.merge(all_sm, esm_embeds_with_genes, on=['gene', 'mutated_sequence']) # this is sufficient :)
     print("all_sm_with_esm", all_sm_with_esm)
     raise Error
