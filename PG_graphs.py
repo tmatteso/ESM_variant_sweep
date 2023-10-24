@@ -629,6 +629,13 @@ def create_parser():
     
     return parser
 
+# after this is debugged, try writing the combination code. To be frank I don't think it'll be good enough to be warranted
+
+
+
+
+
+
 # then make the graph code more modular
 def main():  
     parser = create_parser()
@@ -651,7 +658,7 @@ def main():
         # now we perform the splits and train the estimators
         #splits = [0.01, 0.05, 0.1, 0.3, 0.5, 0.8, ]
         splits = [10, 25, 50, 100, 250, 500, 1000]
-        alphas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        alphas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
         seed_number = 20
         threshold = 1250#1250#625# 313 # this allows 500 train points while still having 20% to validate on
         # okay now let's work on the tqdm part while we wait for embeddings
