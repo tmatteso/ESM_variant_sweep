@@ -45,7 +45,7 @@ def create_parser():
         "--include",
         type=str,
         nargs="+",
-        choices=["mean", "per_tok", "bos", "contacts"],
+        choices=["mean", "slice","m_and_s", "per_tok", "bos", "contacts"],
         help="specify which representations to return",
         required=True,
     )
@@ -91,13 +91,27 @@ def run(args):
             )
             if torch.cuda.is_available() and not args.nogpu:
                 toks = toks.to(device="cuda", non_blocking=True)
-
+            # the choosing of the repr_layers dictates the layers that come back 
+            # can I put a list here?
+            repr_layers = [2, 9, 21, 33]
+            #print(repr_layers)
+            
             out = model(toks, repr_layers=repr_layers, return_contacts=return_contacts)
 
             logits = out["logits"].to(device="cpu")
             representations = {
                 layer: t.to(device="cpu") for layer, t in out["representations"].items()
             }
+            
+            # examine toks, strs, labels
+            #print("toks", toks.shape) # number of sequences x length of sequence
+            #print("representations", representations[repr_layers[0]].shape) # just the layers you requested with appropriate tensor
+            # each repr tensor is of shape: number of sequences x length of sequence x 1280: this is true regardless of per token or mean
+            #raise Error
+            # from the label, get missense location. assume 1 based index to follow convention for missense
+            #print(int(labels[0].split("_")[-1][1:-1])-1)
+            #raise Error
+            locations = [int(label.split("_")[-1][1:-1])-1 for label in labels]
             if return_contacts:
                 contacts = out["contacts"].to(device="cpu")
 
@@ -118,6 +132,35 @@ def run(args):
                         layer: t[i, 1 : truncate_len + 1].mean(0).clone()
                         for layer, t in representations.items()
                     }
+                if "slice" in args.include:
+                    index = locations[i]
+                    # [length of sequence, 1280]
+                    # the indexing format below is sufficient
+                    # remake the fasta file in question with the missense position in the appropriate location
+                    # these objects are way too big -- should be a 1d tensor
+                    result["sliced_representations"] = {
+                        layer: t[i, 1 : truncate_len + 1][index].clone() # need to index here most likely
+                        # also need to read the position of the missense from seqID in fasta
+                        for layer, t in representations.items()
+                    }
+                    #torch.save(result, args.output_file)
+                    #raise Error
+                if "m_and_s" in args.include:
+                    index = locations[i]
+                    result["sliced_representations"] = {
+                        layer: t[i, 1 : truncate_len + 1][index].clone() # need to index here most likely
+                        # also need to read the position of the missense from seqID in fasta
+                        for layer, t in representations.items()
+                    }
+                    result["mean_representations"] = {
+                        layer: t[i, 1 : truncate_len + 1][index].clone() # need to index here most likely
+                        # also need to read the position of the missense from seqID in fasta
+                        for layer, t in representations.items()
+                    }
+                    #t
+                    #print(result)
+                    #raise Error
+
                 if "bos" in args.include:
                     result["bos_representations"] = {
                         layer: t[i, 0].clone() for layer, t in representations.items()
@@ -129,6 +172,7 @@ def run(args):
                     result,
                     args.output_file,
                 )
+                #raise Error
 
 
 def main():
