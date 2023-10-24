@@ -41,6 +41,7 @@ def get_SM_PG(filter_str):
     all_sm = all_gene_muts[~all_gene_muts['mutant'].str.contains(":")]
     # remove the 2 problem proteins
     all_sm = all_sm[~((all_sm.gene == "P53_HUMAN") | (all_sm.gene == "SPIKE_SARS2"))]
+    # let's get this new breakdown straight
     # add back the WT sequence
     all_sm = add_WT_col(all_sm)
     # add saving at filepath
@@ -64,25 +65,51 @@ def add_WT_col(all_sm): # df must have mutated_sequence and mutant cols
     all_sm['WT_sequence'] = all_sm.apply(lambda row: missense_to_WT(row['mutated_sequence'], row['mutant']), axis=1)
     return all_sm
 
+def create_LLR_fasta(input_df, filepath, write=False):
+    subset = input_df[['gene', 'WT_sequence']].drop_duplicates()
+    #subset["seq_ID"] = [ i for i in range(len(subset))]
+    if write:
+        with open(filepath, 'w') as f: # 'All_SM_PG.fasta'
+            for index, row in subset.iterrows():
+                f.write(f">{row['gene']}\n") # was seq_ID before
+                f.write(f"{row['WT_sequence']}\n")
+    # write the file if needed, otherwise return the appropriate dataframe
+    return subset
+
 def load_LLR_scores(LLR_csv, subset, all_sm):
-    # now get LLR and add it to the big df
     # now match the LLRs to the WT sequences
-    # perform the prediction for the DMS assay
     LLR = pd.read_csv(LLR_csv)
-    # the ids that were used to generate the fasta are wrong
-    LLR = LLR.rename(columns={'seq_id': 'seq_ID' }, inplace=False)
+    # now these will just be gene names
+    LLR = LLR.rename(columns={'seq_id': 'gene' }, inplace=False)
     # join on seqID with subset df
-    LLR['seq_ID'] = LLR['seq_ID'].astype('int64')
-    subset['seq_ID'] = subset['seq_ID'].astype('int64')
-    all_WT_LLR = pd.merge(subset, LLR, on=['seq_ID']) 
+    all_WT_LLR = pd.merge(subset, LLR, on=['gene']) 
+    print(all_WT_LLR)
+    raise Error
     all_WT_LLR = all_WT_LLR.rename(columns={'mut_name': 'mutant' }, inplace=False)
     # now expand this to whole dataset based on gene, mut_name
     all_sm_LLR = pd.merge(all_sm, all_WT_LLR, on=['gene', 'mutant', 'WT_sequence'])
     return all_sm_LLR
 
+def create_ESM_fasta(input_df, filepath, write=False,:
+    unique_human_muts = input_df[input_df.gene.str.contains("HUMAN")]
+    unique_mut_seqs = unique_human_muts[['gene', 'mutant', 'mutated_sequence']].drop_duplicates() 
+    unique_mut_seqs['WT_sequence'] = unique_mut_seqs.apply(lambda row: missense_to_WT(row['mutated_sequence'], row['mutant']), axis=1)
+    short_human = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
+    print(short_human)
+    raise Error                 
+    # write the file if needed, otherwise return the appropriate dataframe
+    if write:
+        with open(filepath, 'w') as f: # 'All_SM_PG_esm.fasta'
+            for index, row in short_human.iterrows():
+                f.write(f">{row['gene']}_{row['mutant']}\n") #f.write(f">{row['seq_ID']}\n")
+                f.write(f"{row['mutated_sequence']}\n")
+    return short_human
+
 def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
     esm_embeds = pd.DataFrame.from_dict(loaded_data, orient='index')
-    esm_embeds["seq_ID"] = esm_embeds.index.astype('int64') # this is only 187997
+    print(esm_embeds)
+    raise Error
+    #esm_embeds["seq_ID"] = esm_embeds.index.astype('int64') # this is only 187997
     # needs to be made flexible for whatever layer does the embedding
     # we remove this now, so we can accomodate several columns at once
     esm_embeds = esm_embeds.rename(columns={layer_num: 'esm_embed' }, inplace=False)
@@ -138,57 +165,7 @@ def read_in_pt(filepath, embed_type, folder=False):
     else:
         data_dict = np.load(filepath, allow_pickle=True).item()
     return data_dict
-    
-def create_LLR_fasta(input_df, filepath, write=False):
-    subset = input_df[['gene', 'WT_sequence']].drop_duplicates()
-    subset["seq_ID"] = [ i for i in range(len(subset))]
-    if write:
-        with open(filepath, 'w') as f: # 'All_SM_PG.fasta'
-            for index, row in subset.iterrows():
-                f.write(f">{row['seq_ID']}\n")
-                f.write(f"{row['WT_sequence']}\n")
-    # write the file if needed, otherwise return the appropriate dataframe
-    return subset
 
-def create_ESM_fasta(input_df, filepath, write=False, short=True):
-    # write the file if needed, otherwise return the appropriate dataframe
-    if short:
-        human_assays_only = input_df[input_df.gene.str.contains("HUMAN")]
-        print(human_assays_only, 1)
-        unique_human_muts = (human_assays_only[["gene", "mutated_sequence"]].drop_duplicates()) # 187997 seqs. easy
-        print(unique_human_muts, 2)
-        # so take this indices and 
-        unique_mut_seqs = human_assays_only.loc[human_assays_only.index.intersection(
-            unique_human_muts.index)][["gene", "mutant", "mutated_sequence"]]
-        print(unique_mut_seqs, 4)
-        #unique_mut_seqs = human_assays_only.loc[unique_human_muts.index] #[["gene", "mutant", "mutated_sequence"]]
-        unique_mut_seqs["seq_ID"] = [ i for i in range(len(unique_mut_seqs))]
-        # this will eliminate long sequences -- only the slice ones will have this nomenclature.
-        unique_mut_seqs = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
-        print(unique_mut_seqs, 4)
-        return unique_mut_seqs
-        #raise Error
-#     else: 
-#         unique_mut_seqs = input_df[['gene', 'mutated_sequence']].drop_duplicates()
-#         unique_mut_seqs["seq_ID"] = [ i for i in range(len(unique_mut_seqs))]
-#     if write:
-#         with open(filepath, 'w') as f: # 'All_SM_PG_esm.fasta'
-#             for index, row in unique_mut_seqs.iterrows():
-#                 f.write(f">{row['seq_ID']}\n")
-#                 f.write(f"{row['mutated_sequence']}\n")
-    return unique_mut_seqs
-
-def run_sh_command(command):
-    # Run the command and capture the output
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
-    # Decode bytes to string and print the output
-    if process.returncode == 0:
-        print("Success:")
-        print(stdout.decode())
-    else:
-        print("Error:")
-        print(stderr.decode())
 # make sure this part works tomorrow.
 # run the next slice layer after gym
 # use this script to make graphs on AWS, don't move the files down to local.
@@ -203,13 +180,10 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
     print("unique_mut_seqs", unique_mut_seqs)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
-#     if not ESM_run:
-#         cmd =f"python3 extract.py {esm_model} {ESM_fasta_name} {ESM_dir_name} --repr_layers {repr_layers} --include {embed_type}"
-#         run_sh_command(cmd)
     data_dict = read_in_pt(ESM_dir_name, embed_type, folder=folder)
     #print(data_dict)
     #print(data_dict)
-    subset = create_LLR_fasta(all_sm, LLR_fasta_name, write=True)# not LLR_run) # if LLR_run is false, write the fasta
+    subset = create_LLR_fasta(all_sm, LLR_fasta_name)# not LLR_run) # if LLR_run is false, write the fasta
     print(subset)
     # there must be a conditional to know if the LLR script has been run -- otherwise LLR_csv does not exist
     # make the LLR name
@@ -673,7 +647,7 @@ def main():
         # rename the esm embeds 
         human_assays_only = human_assays_only.rename(columns={args.layer_num: 'esm_embed' }, inplace=False)
         # now we perform the splits and train the estimators
-        #splits = [0.1, 0.3, 0.5, 0.8, 
+        #splits = [0.01, 0.05, 0.1, 0.3, 0.5, 0.8, ]
         splits = [10, 25, 50, 100, 250, 500, 1000]
         seed_number = 20
         threshold = 1250#1250#625# 313 # this allows 500 train points while still having 20% to validate on
