@@ -14,6 +14,7 @@ import seaborn as sns
 import umap.umap_ as umap
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge
+from tqdm import tqdm
 # you should add tqdm: two bars: one for assay out of total, one for sample out of total
 
 
@@ -80,23 +81,18 @@ def load_LLR_scores(LLR_csv, subset, all_sm):
     # now match the LLRs to the WT sequences
     LLR = pd.read_csv(LLR_csv)
     # now these will just be gene names
-    LLR = LLR.rename(columns={'seq_id': 'gene' }, inplace=False)
-    # join on seqID with subset df
-    all_WT_LLR = pd.merge(subset, LLR, on=['gene']) 
-    print(all_WT_LLR)
-    raise Error
-    all_WT_LLR = all_WT_LLR.rename(columns={'mut_name': 'mutant' }, inplace=False)
+    LLR = LLR.rename(columns={'seq_id': 'gene', 'mut_name': 'mutant' }, inplace=False)
     # now expand this to whole dataset based on gene, mut_name
-    all_sm_LLR = pd.merge(all_sm, all_WT_LLR, on=['gene', 'mutant', 'WT_sequence'])
+    all_sm_LLR = pd.merge(all_sm, LLR, on=['gene', 'mutant',]) # had 'WT_sequence' before
+    all_sm_LLR = all_sm_LLR[['gene', 'mutant','WT_sequence', 'esm_score']]
+    all_sm_LLR = pd.merge(subset, all_sm_LLR, on=['gene', 'mutant','WT_sequence'])
     return all_sm_LLR
 
 def create_ESM_fasta(input_df, filepath, write=False,):
     unique_human_muts = input_df[input_df.gene.str.contains("HUMAN")]
     unique_mut_seqs = unique_human_muts[['gene', 'mutant', 'mutated_sequence']].drop_duplicates() 
     unique_mut_seqs['WT_sequence'] = unique_mut_seqs.apply(lambda row: missense_to_WT(row['mutated_sequence'], row['mutant']), axis=1)
-    short_human = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
-    print(short_human)
-    raise Error                 
+    short_human = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022] # 187637 as desired              
     # write the file if needed, otherwise return the appropriate dataframe
     if write:
         with open(filepath, 'w') as f: # 'All_SM_PG_esm.fasta'
@@ -106,42 +102,16 @@ def create_ESM_fasta(input_df, filepath, write=False,):
     return short_human
 
 def load_ESM_embeds(loaded_data, unique_mut_seqs, all_sm, layer_num):
-    esm_embeds = pd.DataFrame.from_dict(loaded_data, orient='index')
-    print(esm_embeds)
-    raise Error
-    #esm_embeds["seq_ID"] = esm_embeds.index.astype('int64') # this is only 187997
-    # needs to be made flexible for whatever layer does the embedding
-    # we remove this now, so we can accomodate several columns at once
-    esm_embeds = esm_embeds.rename(columns={layer_num: 'esm_embed' }, inplace=False)
-    # drop all other columns
-    esm_embeds = esm_embeds[["seq_ID", 'esm_embed']]
-    print("esm_embeds", esm_embeds)
-    # there must be a big problem here that is causing me to loose many embeddings
-    print("unique_mut_seqs", unique_mut_seqs) # it doesn't go down much at all
-    unique_mut_seqs = unique_mut_seqs[unique_mut_seqs.mutated_sequence.str.len() <= 1022]
-    indices = unique_mut_seqs[["gene", "mutated_sequence"]].drop_duplicates()
-    unique_mut_seqs = unique_mut_seqs.loc[unique_mut_seqs.index.intersection(
-            indices.index)][["gene", "mutant", "mutated_sequence"]]
-    #unique_mut_seqs = unique_mut_seqs.loc[indices.index]
-    # why do we still have too many unique_mut_seqs?
-    print("unique_mut_seqs", unique_mut_seqs)
-    #raise Error
-    # now merged based on index
-    # we went from 226593 to 193752 here
-    esm_embeds_with_genes = pd.merge(unique_mut_seqs, esm_embeds, on=['seq_ID'])
-    print("esm_embeds_with_genes", esm_embeds_with_genes)
-    # may need to check here, our variant count ahs gone up alot
-    # now we go from all unique esm embeds to all entries in the original df: all_sm
-    # somehow this goes from 193752 to 952302. This does not make sense.
-    print("all_sm", all_sm) # there are likely duplicates in all_sm
-    
-    indices = esm_embeds_with_genes[["gene", "mutated_sequence"]].drop_duplicates()
-    esm_embeds_with_genes = esm_embeds_with_genes.loc[indices.index]
-    indices = all_sm[["gene", "mutated_sequence"]].drop_duplicates()
-    all_sm = all_sm.loc[indices.index]
-    all_sm_with_esm = pd.merge(all_sm, esm_embeds_with_genes, on=['gene', 'mutated_sequence']) # this is sufficient :)
-    print("all_sm_with_esm", all_sm_with_esm)
-    # these things have way more variants than they should
+    #esm_embeds = pd.DataFrame.from_dict(loaded_data, orient='index')
+    esm_embeds = pd.DataFrame(list(loaded_data.items()), columns=['gene_mutant', 'esm_embed'])
+    esm_embeds[['gene', 'mutant']] = esm_embeds['gene_mutant'].str.rsplit('_', n=1, expand=True)
+    esm_embeds = esm_embeds[['gene', 'mutant', 'esm_embed']]
+    # merge to give all the unique sequence their own esm embed
+    esm_embeds_with_genes = pd.merge(unique_mut_seqs, esm_embeds, on=['gene', 'mutant'])
+    esm_embeds_with_genes = esm_embeds_with_genes[["gene", "mutant", "mutated_sequence", 'esm_embed']]
+    #esm_embeds_with_genes = esm_embeds_with_genes[['gene', 'mutated_sequence', 'esm_embed']]
+    # merge to give all sequences the appropriate esm embedding
+    all_sm_with_esm = pd.merge(all_sm, esm_embeds_with_genes, on=['gene', 'mutant', 'mutated_sequence']) # this is sufficient :)
     return all_sm_with_esm
 
 def read_in_pt(filepath, embed_type, folder=False):
@@ -175,35 +145,26 @@ def assemble_full_df(filter_str, ESM_fasta_name, LLR_fasta_name, ESM_dir_name,
                      folder=False, 
                      esm_model="esm1b_t33_650M_UR50S", embed_type="mean", repr_layers=33):
     all_sm = get_SM_PG(filter_str)
-    print("all_sm", all_sm)
+    print(1)
     unique_mut_seqs = create_ESM_fasta(all_sm, ESM_fasta_name,)# not ESM_run) # this is 266260 -- should be 187997 to match on seqid?
-    print("unique_mut_seqs", unique_mut_seqs)
+    print(2)
     # there must be a conditional to know if esm has already been run, so it knows the .pt exist
     #some(ESM_fasta_name, repr_layers, embed_type)Human_SM_PG_slice
     data_dict = read_in_pt(ESM_dir_name, embed_type, folder=folder)
-    #print(data_dict)
-    #print(data_dict)
-    subset = create_LLR_fasta(all_sm, LLR_fasta_name)# not LLR_run) # if LLR_run is false, write the fasta
-    print(subset)
-    # there must be a conditional to know if the LLR script has been run -- otherwise LLR_csv does not exist
+    print(3)
+    subset = create_LLR_fasta(unique_mut_seqs, LLR_fasta_name)# not LLR_run) # if LLR_run is false, write the fasta
+    print(4)
     # make the LLR name
     stub = LLR_fasta_name.split(".")[0]
     LLR_csv = f"{stub}_LLR.csv"
-    print(LLR_csv, LLR_run) # I think we were wondering if a suitable csv exists
-    #if not LLR_run: # was esm-variants/esm_score_missense_mutations.py
-       # cmd = f"python3 esm_score_missense_mutations.py --input-fasta-file {LLR_fasta_name} --output-csv-file {LLR_csv}"
-        #run_sh_command(cmd)
-    all_sm_LLR = load_LLR_scores(LLR_csv, subset, all_sm)
-    print(all_sm_LLR, len(all_sm_LLR[all_sm_LLR.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
+    subset =  all_sm[all_sm.gene.str.contains("HUMAN")]
+    subset = subset[subset.mutated_sequence.str.len() <= 1022]
+    all_sm_LLR = load_LLR_scores(LLR_csv,subset, unique_mut_seqs)
     print(5)
+    #print(all_sm_LLR, len(all_sm_LLR[all_sm_LLR.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
     all_sm_with_LLR_and_ESM = load_ESM_embeds(data_dict, unique_mut_seqs, all_sm_LLR, repr_layers)
-    print(all_sm_with_LLR_and_ESM)
     print(6)
-    # now subset on Human only?
-    all_sm_with_LLR_and_ESM = all_sm_with_LLR_and_ESM[all_sm_with_LLR_and_ESM.gene.str.contains("HUMAN")]
     # must happen after adding the ESM embeddings due to the nature of the fasta that generated this. Very dumb.
-    print(all_sm_with_LLR_and_ESM, len(all_sm_with_LLR_and_ESM[all_sm_with_LLR_and_ESM.assay == "NKX31_HUMAN_Rocklin_2023_2L9R.csv"].index))
-    print(6)
     # DO NOT save this. NEVER save a df with tensors in it.
     return all_sm_with_LLR_and_ESM
 
@@ -298,7 +259,13 @@ def get_splits(input_df, SEED, splits):
             train_splits[split] = train_split
         else:
             # split would take 80% of the overrall train, not 100% of the 80%
-            _, train_split = train_test_split(train_overall, test_size=split*len(input_df.index), random_state=SEED)
+            split_size = int(split*len(input_df.index),)
+            #print(len(train_overall.index), len(test.index), split_size, len(input_df.index))
+            if split_size != len(train_overall.index):
+                _, train_split = train_test_split(train_overall, test_size=split_size, random_state=SEED)
+            else: 
+                train_split = train_overall
+            
             train_splits[split] = train_split
     return train_splits, test
 
@@ -308,7 +275,10 @@ def get_X(new_subset, estimator_list): # ls of str
         # gather necessary components in dict
         if "ESM" in estimator: # this will need editing in the future
             ESM_subset = (np.vstack(new_subset.esm_embed.values)) # (168, 1280)
-            component_dict["ESM"] = ESM_subset
+            # now get the std dev for each feature and divide by it 
+            std_devs = np.std(ESM_subset, axis=0)
+            ESM_subset = ESM_subset / std_devs
+            component_dict["ESM"] = ESM_subset # X_normalized
         if "LLR" in estimator:
             LLR_subset = (new_subset.esm_score.values)
             LLR_subset = LLR_subset.reshape(LLR_subset.shape[0], 1)
@@ -341,10 +311,7 @@ def get_X(new_subset, estimator_list): # ls of str
                 all_together.append(component_dict[piece])
             # concatenate and place in X_arr
             X = np.concatenate(all_together, axis=1)
-        # now get the std dev for each feature and divide by it 
-        std_devs = np.std(X, axis=0)
-        X_normalized = X / std_devs
-        X_arr.append(X_normalized)
+        X_arr.append(X)#X_normalized)
     # y_arr is just DMS_score
     y_arr = new_subset.DMS_score.values
     y_arr = y_arr.reshape(y_arr.shape[0], 1)
@@ -371,9 +338,11 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
             #print(assay, len(human_assays_only[human_assays_only.assay == assay].index))
             subset.append(assay)
     unique_assays = subset
-    print("number of assays:", len(unique_assays))
+    #print("number of assays:", len(unique_assays))
+    #print("human_assays_only", human_assays_only.columns)
     assay_sizes = [len(human_assays_only[human_assays_only['assay'] == assay].index) for assay in unique_assays]
-    [print(unique_assays[as_i], assay_sizes[as_i]) for as_i in range(len(unique_assays))]
+    #[print(unique_assays[as_i], assay_sizes[as_i]) for as_i in range(len(unique_assays))]
+    #print("")
     # need to score across assays
     for_graphs = {key: [[] for i in range(len(unique_assays))] for key in splits}
     # keep track of assay order
@@ -382,61 +351,68 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
     # use train split as basis for all stuff
     # tqdm here -- this is straightforward
     # Setup the outer tqdm bar
-#     total_sum = sum(lst)
-#     cumulative_sum = 0
-#     with tqdm(total=len(lst), desc="List Progress", position=0) as pbar1:
-#         with tqdm(total=total_sum, desc="Cumulative Sum", position=1, leave=False) as pbar2:
-#             for item in lst:
-#                 cumulative_sum += item
-#                 pbar2.update(item)
-#                 pbar1.update(1)
-    for as_i in range(len(unique_assays)):
-        assay = unique_assays[as_i]
-        new_subset = human_assays_only[human_assays_only['assay'] == assay]
-        print(assay, len(new_subset.index))
-        # make a dictionary of split:[]
-        split_store =  {key: [] for key in splits}
-        for seed in seed_list:
-            # get splits
-            train_splits, test = get_splits(new_subset, seed, splits)
-            for fraction, train_split in train_splits.items():
-                # get the X arr for train
-                X_train, y_train = get_X(train_split, estimator_list)
-                # same for test
-                X_test, y_test = get_X(test, estimator_list)
-                # now define all_spearmans to catch
-                all_spearmans = [[] for k in range(len(X_train))]
-                for i in range(len(all_spearmans)):
-                    if estimator_list[i] == "LLR_direct": 
-                        res = stats.spearmanr( X_test[i], y_test)
-                        # is a single val acceptable here? Yes
-                        all_spearmans[i].append(res.correlation)
-                    else:
-                        if "knn" in estimator_list[i]:
-                            regressor = KNeighborsRegressor()
-                        # ridge, LLR_direct, knn regressor, then start probing combinations
-                        else:
-                            regressor = Ridge(alpha=alpha) # estimator_list[i]
-                        all_spearmans[i] = train_and_predict(X_train[i], y_train, X_test[i], y_test, 
-                                                                 all_spearmans[i], regressor)
-                split_store[fraction].append(all_spearmans)
-        # 20, then 7
-        for key, value in split_store.items():
-            split_store[key] = np.array(value)
-        #print(split_store[0.1].shape) # 20,7,1
-        # after collecting all splits
-        # catch the assay in categories
-        categories += [assay]
-        # so make a different graph for each split?
-        for k in split_store.keys():
-            for i in range(split_store[k].shape[1]):
-                arr = np.mean(split_store[k][:, i]) # should be shape of 20 for the input
-                if np.all(np.isnan(arr)):
-                    arr = np.zeros_like(arr)
-                for_graphs[k][as_i].append(arr)
-        # convert to np arrays, account for N < 500 for an assay
-        print(categories, for_graphs) # fraction: [assay[estimator]]
-    # these definitely should get saved somehow. Generating this is a pain.
+    total_sum = sum(assay_sizes)
+    cumulative_sum = 0
+    with tqdm(total=len(assay_sizes), desc="Assay Number", position=2,leave=False) as pbar3:
+        # is this it self an iterable? no!
+        with tqdm(total=total_sum, desc="Variant Number", position=3, leave=False) as pbar4:
+            for as_i in range(len(unique_assays)):
+                
+                assay = unique_assays[as_i]
+                new_subset = human_assays_only[human_assays_only['assay'] == assay]
+        #         print(assay, len(new_subset.index))
+                # make a dictionary of split:[]
+                split_store =  {key: [] for key in splits}
+                with tqdm(total=len(seed_list), desc="Random Seed Number", position=4, leave=False) as pbar5:
+                    for seed in seed_list:
+                        # get splits
+                        train_splits, test = get_splits(new_subset, seed, splits)
+                        with tqdm(total=len(train_splits.keys()), desc="Split Number", position=5, leave=False) as pbar6:
+                            for fraction, train_split in train_splits.items():
+                                # get the X arr for train
+                                X_train, y_train = get_X(train_split, estimator_list)
+                                # same for test
+                                X_test, y_test = get_X(test, estimator_list)
+                                # now define all_spearmans to catch
+                                all_spearmans = [[] for k in range(len(X_train))]
+                                with tqdm(total=len(all_spearmans), desc="Estimator Number", position=6, leave=False) as pbar7:
+                                    for i in range(len(all_spearmans)):
+                                        if estimator_list[i] == "LLR_direct": 
+                                            res = stats.spearmanr( X_test[i], y_test)
+                                            # is a single val acceptable here? Yes
+                                            all_spearmans[i].append(res.correlation)
+                                        else:
+                                            if "knn" in estimator_list[i]:
+                                                regressor = KNeighborsRegressor()
+                                            # ridge, LLR_direct, knn regressor, then start probing combinations
+                                            else:
+                                                regressor = Ridge(alpha=alpha) # estimator_list[i]
+                                            all_spearmans[i] = train_and_predict(X_train[i], y_train, X_test[i], y_test, 
+                                                                                     all_spearmans[i], regressor)
+                                        pbar7.update(1)
+                                split_store[fraction].append(all_spearmans)
+                                pbar6.update(1) 
+                        pbar5.update(1)
+                    # 20, then 7
+                    for key, value in split_store.items():
+                        split_store[key] = np.array(value)
+                    #print(split_store[0.1].shape) # 20,7,1
+                    # after collecting all splits
+                    # catch the assay in categories
+                    categories += [assay]
+                    # so make a different graph for each split?
+                    for k in split_store.keys():
+                        for i in range(split_store[k].shape[1]):
+                            arr = np.mean(split_store[k][:, i]) # should be shape of 20 for the input
+                            if np.all(np.isnan(arr)):
+                                arr = np.zeros_like(arr)
+                            for_graphs[k][as_i].append(arr)
+                    # convert to np arrays, account for N < 500 for an assay
+                    cumulative_sum += assay_sizes[as_i]
+                    pbar4.update(assay_sizes[as_i])
+                    pbar3.update(1)
+                #print(categories, for_graphs) # fraction: [assay[estimator]]
+            # these definitely should get saved somehow. Generating this is a pain.
     return categories, for_graphs
 
 
@@ -468,8 +444,7 @@ def make_graphs(estimator_list, df_path, layer_num, embed_type):
     # need to define the fig and ax here
     df = pd.read_csv(df_path)
     assert len(df.alpha.unique()) == 1
-    print(df.split.dtype)
-    if df.split.dtype == int64:
+    if df.split.dtype == "int64":
         split_type = "int"
     else: 
         split_type = "float"
@@ -546,9 +521,9 @@ def make_graphs(estimator_list, df_path, layer_num, embed_type):
     scatter_ax.legend(unique_handles, unique_labels, loc='upper left', bbox_to_anchor=(1, 1))
     scatter_fig.tight_layout()
     # Save or show the scatterplot figure
-    plt.savefig(f"SM Human Assays_{layer_num}_{embed_type}_{alpha}_{split_type}.png", facecolor='white')
+    print(f"SM_Human_Assays_{layer_num}_{embed_type}_{alpha_param}_{split_type}.png")
+    plt.savefig(f"SM_Human_Assays_{layer_num}_{embed_type}_{alpha_param}_{split_type}.png", facecolor='white')
     plt.close(scatter_fig)
-    raise Error
 
 # extra logic: train? bool, 
 # ESM_run=True, LLR_run=True, folder=False
@@ -625,17 +600,8 @@ def create_parser():
         type=str,
         default="None",
         help="Tells the pipeline where to store or read the prediction results. Default None",
-    )
-    
+    )   
     return parser
-
-# after this is debugged, try writing the combination code. To be frank I don't think it'll be good enough to be warranted
-
-
-
-
-
-
 # then make the graph code more modular
 def main():  
     parser = create_parser()
@@ -644,6 +610,13 @@ def main():
             "one-hot", "LLR_one-hot",
             "ESM", "LLR_ESM",
             "ESM_one-hot", "ESM_one-hot_LLR", "LLR_direct", "knn_ESM"]
+    results = []
+    alphas = [0.1, 0.25, 0.5, 0.75, 1.0, ] #[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
+    # I would do [0.1, 0.25, 0.5, 0.75, 1.0, ]
+    splits = [10, 100, 250, 500, 1000] #25
+    seed_number = 20
+    #threshold = 1250#13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
+    # while we're here I want 3 tqdm: alpha, sample number, assay_number.
     if not args.already_trained:
         # first get the Human assay SM dataframe.
         # and change the ESM dir names to match the naming convention
@@ -655,45 +628,51 @@ def main():
                                              esm_model=args.esm_model, embed_type=args.embed_type, repr_layers=args.layer_num)
         # rename the esm embeds 
         human_assays_only = human_assays_only.rename(columns={args.layer_num: 'esm_embed' }, inplace=False)
-        # now we perform the splits and train the estimators
-        #splits = [0.01, 0.05, 0.1, 0.3, 0.5, 0.8, ]
-        splits = [10, 25, 50, 100, 250, 500, 1000]
-        alphas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
-        seed_number = 20
-        threshold = 1250#1250#625# 313 # this allows 500 train points while still having 20% to validate on
-        # okay now let's work on the tqdm part while we wait for embeddings
+        # you can add another one for int, float
+        # tqdm logic is a little sus
+        # kinda want another tqdm for either training split or estimator
+        with tqdm(total=2, desc="Split Type", position=0) as pbar1:
+            with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False) as pbar2:
+                #print("butt") # so the tqdm is not displaying as intended
+                for alpha in alphas:
+                    categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
+                    # categories is just ls of assays
+                    # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
+                    out_split = args.pred_results.split(".")[0]
+                    split_type = "int" if type(splits[0]) == int else "float"
+                    results_name = f"{out_split}_{split_type}_{alpha}.csv"
+                    results.append(results_name)
+                    write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha)# "Large_Human_Results.csv")
+                    pbar2.update(1)
+            pbar1.update(1)    
+            # now do it again with the percentage based split set, using no threshold
+            splits = [0.01, 0.1, 0.3, 0.5, 0.8, ] # change to [ 0.05, ] 0.01* 500
+            threshold = 500#13000
+            with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False) as pbar2:
+                for alpha in alphas:
+                    categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
+                    # categories is just ls of assays
+                    # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
+                    out_split = args.pred_results.split(".")[0]
+                    split_type = "int" if type(splits[0]) == int else "float"            
+                    results_name = f"{out_split}_{split_type}_{alpha}.csv"
+                    results.append(results_name)
+                    write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha)# "Large_Human_Results.csv")
+                    pbar2.update(1)
+            pbar1.update(1)
         
-        # okay still need LLR direct and some knn ones in here
-        # estimator list should be specified here
-        for alpha in alphas:
-            categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
-    #         print(categories)
-    #         print(for_graphs)
-    #         print(estimator_list)
-            # write out categories and for_graphs 
-            # categories is just ls of assays
-            # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
-            # obvs need another arg for the split type
-            write_out_pred_results(for_graphs, categories, estimator_list, args.pred_results, alpha)# "Large_Human_Results.csv")
-            # then we graph the output of the estimators
-            # need layer num and embed type in the title
-            make_graphs(estimator_list, args.pred_results, args.layer_num, args.embed_type)
-        # now do it again with the percentage based split set, using no threshold
-        splits = [0.01, 0.05, 0.1, 0.3, 0.5, 0.8, ]
-        threshold = 0
-        for alpha in alphas:
-            categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
-    #         print(categories)
-    #         print(for_graphs)
-    #         print(estimator_list)
-            # write out categories and for_graphs 
-            # categories is just ls of assays
-            # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
-            write_out_pred_results(for_graphs, categories, estimator_list, args.pred_results, alpha)# "Large_Human_Results.csv")
-            # then we graph the output of the estimators
-            # need layer num and embed type in the title
-            make_graphs(estimator_list, args.pred_results, args.layer_num, args.embed_type)
-    # contingent upon this working, we simply deploy to each suitable .npy
+    # need a 4th tqdm for the 2nd set of splits
+    # if already trained
+    for alpha in alphas:
+        out_split = args.pred_results.split(".")[0]
+        # we asumme both int and float csvs exist
+        types = "int", "float"
+        for split_type in types:
+            #split_type = "int" if type(splits[0]) == int else "float"
+            results_name = f"{out_split}_{split_type}_{alpha}.csv"
+            results.append(results_name)
+    for res in results:
+        make_graphs(estimator_list, res, args.layer_num, args.embed_type)
     # it will take time for the npys to be made.
 
 if __name__ == "__main__":
