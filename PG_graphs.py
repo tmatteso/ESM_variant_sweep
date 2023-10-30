@@ -14,7 +14,8 @@ import seaborn as sns
 import umap.umap_ as umap
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge
-from tqdm import tqdm
+#from tqdm import tqdm
+from tqdm.notebook import tqdm
 # you should add tqdm: two bars: one for assay out of total, one for sample out of total
 
 
