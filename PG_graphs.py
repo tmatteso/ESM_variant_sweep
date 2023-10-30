@@ -615,7 +615,7 @@ def main():
     # I would do [0.1, 0.25, 0.5, 0.75, 1.0, ]
     splits = [10, 100, 250, 500, 1000] #25
     seed_number = 20
-    #threshold = 1250#13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
+    threshold = 1250#13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
     # while we're here I want 3 tqdm: alpha, sample number, assay_number.
     if not args.already_trained:
         # first get the Human assay SM dataframe.
