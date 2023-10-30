@@ -14,8 +14,8 @@ import seaborn as sns
 import umap.umap_ as umap
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge
-#from tqdm import tqdm
-from tqdm.notebook import tqdm
+from tqdm import tqdm
+import sys
 # you should add tqdm: two bars: one for assay out of total, one for sample out of total
 
 
@@ -354,9 +354,9 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
     # Setup the outer tqdm bar
     total_sum = sum(assay_sizes)
     cumulative_sum = 0
-    with tqdm(total=len(assay_sizes), desc="Assay Number", position=2,leave=False) as pbar3:
+    with tqdm(total=len(assay_sizes), desc="Assay Number", position=2,leave=False, file=sys.stderr) as pbar3:
         # is this it self an iterable? no!
-        with tqdm(total=total_sum, desc="Variant Number", position=3, leave=False) as pbar4:
+        with tqdm(total=total_sum, desc="Variant Number", position=3, leave=False, file=sys.stderr) as pbar4:
             for as_i in range(len(unique_assays)):
                 
                 assay = unique_assays[as_i]
@@ -364,11 +364,11 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
         #         print(assay, len(new_subset.index))
                 # make a dictionary of split:[]
                 split_store =  {key: [] for key in splits}
-                with tqdm(total=len(seed_list), desc="Random Seed Number", position=4, leave=False) as pbar5:
+                with tqdm(total=len(seed_list), desc="Random Seed Number", position=4, leave=False, file=sys.stderr) as pbar5:
                     for seed in seed_list:
                         # get splits
                         train_splits, test = get_splits(new_subset, seed, splits)
-                        with tqdm(total=len(train_splits.keys()), desc="Split Number", position=5, leave=False) as pbar6:
+                        with tqdm(total=len(train_splits.keys()), desc="Split Number", position=5, leave=False, file=sys.stderr) as pbar6:
                             for fraction, train_split in train_splits.items():
                                 # get the X arr for train
                                 X_train, y_train = get_X(train_split, estimator_list)
@@ -376,7 +376,7 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
                                 X_test, y_test = get_X(test, estimator_list)
                                 # now define all_spearmans to catch
                                 all_spearmans = [[] for k in range(len(X_train))]
-                                with tqdm(total=len(all_spearmans), desc="Estimator Number", position=6, leave=False) as pbar7:
+                                with tqdm(total=len(all_spearmans), desc="Estimator Number", position=6, leave=False, file=sys.stderr) as pbar7:
                                     for i in range(len(all_spearmans)):
                                         if estimator_list[i] == "LLR_direct": 
                                             res = stats.spearmanr( X_test[i], y_test)
@@ -632,8 +632,8 @@ def main():
         # you can add another one for int, float
         # tqdm logic is a little sus
         # kinda want another tqdm for either training split or estimator
-        with tqdm(total=2, desc="Split Type", position=0) as pbar1:
-            with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False) as pbar2:
+        with tqdm(total=2, desc="Split Type", position=0, file=sys.stderr) as pbar1:
+            with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False, file=sys.stderr) as pbar2:
                 #print("butt") # so the tqdm is not displaying as intended
                 for alpha in alphas:
                     categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
@@ -649,7 +649,7 @@ def main():
             # now do it again with the percentage based split set, using no threshold
             splits = [0.01, 0.1, 0.3, 0.5, 0.8, ] # change to [ 0.05, ] 0.01* 500
             threshold = 500#13000
-            with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False) as pbar2:
+            with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False, file=sys.stderr) as pbar2:
                 for alpha in alphas:
                     categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
                     # categories is just ls of assays
