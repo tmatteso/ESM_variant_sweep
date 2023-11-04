@@ -637,7 +637,7 @@ def main():
     alphas = [1, 5, 10, 50, 100] #[0.1, 0.25, 0.5, 0.75, 1.0, ] #[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
     # I would do [0.1, 0.25, 0.5, 0.75, 1.0, ]
     splits = [10, 500, 1000]#[10, 100, 250, 500, 1000] #25
-    seed_number = 2#20
+    seed_number = 20#20
     threshold = 1250#13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
     # while we're here I want 3 tqdm: alpha, sample number, assay_number.
     if not args.already_trained:
