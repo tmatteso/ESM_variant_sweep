@@ -277,17 +277,23 @@ def get_X(new_subset, estimator_list): # ls of str
         if "ESM" in estimator: # this will need editing in the future
             ESM_subset = (np.vstack(new_subset.esm_embed.values)) # (168, 1280)
             # now get the std dev for each feature and divide by it 
-            std_devs = np.std(ESM_subset, axis=0)
-            ESM_subset = ESM_subset / std_devs
+            scaler = StandardScaler()
+            ESM_subset = scaler.fit_transform(ESM_subset)
+            #std_devs = np.std(ESM_subset, axis=0)
+            #ESM_subset = ESM_subset / std_devs
             component_dict["ESM"] = ESM_subset # X_normalized
         if "LLR" in estimator:
             LLR_subset = (new_subset.esm_score.values)
             LLR_subset = LLR_subset.reshape(LLR_subset.shape[0], 1)
+            scaler = StandardScaler()
+            LLR_subset = scaler.fit_transform(LLR_subset)
             component_dict["LLR"] = LLR_subset
         if "one-hot" in estimator:
             # add the augment to LLR -- just a one hot encoding
             seqs = new_subset.mutated_sequence.values
             one_hot = seqs_to_onehot(seqs) # seems to work fine
+            scaler = StandardScaler()
+            one_hot = scaler.fit_transform(one_hot)
             component_dict["one-hot"] = one_hot
     # now that all components are gathered, create the X_arr combinations based on the estimator list
     X_arr = []
@@ -605,6 +611,21 @@ def create_parser():
     return parser
 # then make the graph code more modular
 def main():  
+    # now we adjust the alphas to [1, 5, 10, 50, 100]
+    # just do the alpha and standardize for now
+
+    # after choosing alpha:
+    # weight them st yotta + beta + gamma = 1
+    # make this is an input to the script so we can parallelize across 12 cases
+    # keep unweighted (0.33, 0.33, 0.33)
+    # 0.1, 0.8, 0.1 -- all three vars of this
+    # 0.2, 0.6, 0.2 -- all three vars of this
+    # 0.45, 0.45, 0.1 -- all three vars of this
+    # 0.4, 0.4, 0.2, -- all three vars of this
+    # so our problem is 12 times bigger
+    # but we only need representation mean 21 now, so 1/8 the number: still 
+    #beta, gamma, yotta = 0.1, 0.8, 0.1
+    
     parser = create_parser()
     args = parser.parse_args()
     estimator_list = [
@@ -612,10 +633,11 @@ def main():
             "ESM", "LLR_ESM",
             "ESM_one-hot", "ESM_one-hot_LLR", "LLR_direct", "knn_ESM"]
     results = []
-    alphas = [0.1, 0.25, 0.5, 0.75, 1.0, ] #[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
+    # we can submit 5 jobs: one for each alpha this time!
+    alphas = [1, 5, 10, 50, 100] #[0.1, 0.25, 0.5, 0.75, 1.0, ] #[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
     # I would do [0.1, 0.25, 0.5, 0.75, 1.0, ]
-    splits = [10, 100, 250, 500, 1000] #25
-    seed_number = 20
+    splits = [10, 500, 1000]#[10, 100, 250, 500, 1000] #25
+    seed_number = 2#20
     threshold = 1250#13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
     # while we're here I want 3 tqdm: alpha, sample number, assay_number.
     if not args.already_trained:
@@ -636,6 +658,7 @@ def main():
             with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False, file=sys.stderr) as pbar2:
                 #print("butt") # so the tqdm is not displaying as intended
                 for alpha in alphas:
+                    # beta, gamma, yotta must be args to this function
                     categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
                     # categories is just ls of assays
                     # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
@@ -643,11 +666,12 @@ def main():
                     split_type = "int" if type(splits[0]) == int else "float"
                     results_name = f"{out_split}_{split_type}_{alpha}.csv"
                     results.append(results_name)
+                    # beta, gamma, yotta must be args to this function
                     write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha)# "Large_Human_Results.csv")
                     pbar2.update(1)
             pbar1.update(1)    
             # now do it again with the percentage based split set, using no threshold
-            splits = [0.01, 0.1, 0.3, 0.5, 0.8, ] # change to [ 0.05, ] 0.01* 500
+            splits = [0.01, 0.4, 0.8, ]#[0.01, 0.1, 0.3, 0.5, 0.8, ] # change to [ 0.05, ] 0.01* 500
             threshold = 500#13000
             with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False, file=sys.stderr) as pbar2:
                 for alpha in alphas:
@@ -673,6 +697,7 @@ def main():
             results_name = f"{out_split}_{split_type}_{alpha}.csv"
             results.append(results_name)
     for res in results:
+        # beta, gamma, yotta must be args to this function
         make_graphs(estimator_list, res, args.layer_num, args.embed_type)
     # it will take time for the npys to be made.
 
