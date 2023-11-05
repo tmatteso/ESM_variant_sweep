@@ -270,31 +270,47 @@ def get_splits(input_df, SEED, splits):
             train_splits[split] = train_split
     return train_splits, test
 
-def get_X(new_subset, estimator_list): # ls of str
+def get_X(new_subset, estimator_list, train_scaler = None): # ls of str
     component_dict = dict()
+    new_scalers = [0, 0, 0]
     for estimator in estimator_list:
         # gather necessary components in dict
         if "ESM" in estimator: # this will need editing in the future
             ESM_subset = (np.vstack(new_subset.esm_embed.values)) # (168, 1280)
             # now get the std dev for each feature and divide by it 
-            scaler = StandardScaler()
-            ESM_subset = scaler.fit_transform(ESM_subset)
-            #std_devs = np.std(ESM_subset, axis=0)
-            #ESM_subset = ESM_subset / std_devs
-            component_dict["ESM"] = ESM_subset # X_normalized
+            if train_scaler == None: 
+                scaler = StandardScaler()
+                ESM_subset = scaler.fit_transform(ESM_subset)
+                new_scalers[0] = scaler
+                #std_devs = np.std(ESM_subset, axis=0)
+                #ESM_subset = ESM_subset / std_devs
+                component_dict["ESM"] = ESM_subset # X_normalized
+            else: # train_scaler will be an ls of scalers for the appropriate features
+                ESM_subset = train_scaler[0].transform(ESM_subset)
+                component_dict["ESM"] = ESM_subset
         if "LLR" in estimator:
             LLR_subset = (new_subset.esm_score.values)
             LLR_subset = LLR_subset.reshape(LLR_subset.shape[0], 1)
-            scaler = StandardScaler()
-            LLR_subset = scaler.fit_transform(LLR_subset)
-            component_dict["LLR"] = LLR_subset
+            if train_scaler == None: 
+                scaler = StandardScaler()
+                LLR_subset = scaler.fit_transform(LLR_subset)
+                new_scalers[1] = scaler
+                component_dict["LLR"] = LLR_subset
+            else: # train_scaler will be an ls of scalers for the appropriate features
+                LLR_subset = train_scaler[1].transform(LLR_subset)
+                component_dict["LLR"] = LLR_subset
         if "one-hot" in estimator:
             # add the augment to LLR -- just a one hot encoding
             seqs = new_subset.mutated_sequence.values
             one_hot = seqs_to_onehot(seqs) # seems to work fine
-            scaler = StandardScaler()
-            one_hot = scaler.fit_transform(one_hot)
-            component_dict["one-hot"] = one_hot
+            if train_scaler == None: 
+                scaler = StandardScaler()
+                one_hot = scaler.fit_transform(one_hot)
+                new_scalers[2] = scaler
+                component_dict["one-hot"] = one_hot
+            else:
+                one_hot = train_scaler[2].transform(one_hot)
+                component_dict["one-hot"] = one_hot
     # now that all components are gathered, create the X_arr combinations based on the estimator list
     X_arr = []
     for estimator in estimator_list:
@@ -322,7 +338,7 @@ def get_X(new_subset, estimator_list): # ls of str
     # y_arr is just DMS_score
     y_arr = new_subset.DMS_score.values
     y_arr = y_arr.reshape(y_arr.shape[0], 1)
-    return X_arr, y_arr
+    return X_arr, y_arr, new_scalers
 
 def train_and_predict(X_train, y_train, X_test, y_test, corre_ls, lm):    
     # Train the model -- default alpha is 1.0 as desired.
@@ -374,12 +390,14 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
                     for seed in seed_list:
                         # get splits
                         train_splits, test = get_splits(new_subset, seed, splits)
+                        # is applying the standardization to each separately a good idea or cheating?
+                        # for now just keep jacking up the sparsity penalty
                         with tqdm(total=len(train_splits.keys()), desc="Split Number", position=5, leave=False, file=sys.stderr) as pbar6:
                             for fraction, train_split in train_splits.items():
                                 # get the X arr for train
-                                X_train, y_train = get_X(train_split, estimator_list)
+                                X_train, y_train, train_scaler = get_X(train_split, estimator_list)
                                 # same for test
-                                X_test, y_test = get_X(test, estimator_list)
+                                X_test, y_test, _ = get_X(test, estimator_list, train_scaler)
                                 # now define all_spearmans to catch
                                 all_spearmans = [[] for k in range(len(X_train))]
                                 with tqdm(total=len(all_spearmans), desc="Estimator Number", position=6, leave=False, file=sys.stderr) as pbar7:
@@ -634,7 +652,7 @@ def main():
             "ESM_one-hot", "ESM_one-hot_LLR", "LLR_direct", "knn_ESM"]
     results = []
     # we can submit 5 jobs: one for each alpha this time!
-    alphas = [1, 5, 10, 50, 100] #[0.1, 0.25, 0.5, 0.75, 1.0, ] #[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
+    alphas = [100, 500, 1000, 5000, 10000 ]#5, 10, 50, 100] #[0.1, 0.25, 0.5, 0.75, 1.0, ] #[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
     # I would do [0.1, 0.25, 0.5, 0.75, 1.0, ]
     splits = [10, 500, 1000]#[10, 100, 250, 500, 1000] #25
     seed_number = 20#20
