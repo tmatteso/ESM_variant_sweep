@@ -270,7 +270,14 @@ def get_splits(input_df, SEED, splits):
             train_splits[split] = train_split
     return train_splits, test
 
-def get_X(new_subset, estimator_list, train_scaler = None): # ls of str
+# I want to refactor get_X
+
+
+def get_X(new_subset, estimator_list,  beta, gamma, yotta, train_scaler = None,): # ls of str
+    # beta weighs the LLR
+    # gamma weighs the one hot
+    # yotta weighs the ESM embed
+    map_to_params = {"LLR": beta, "one-hot":gamma, "ESM":yotta}
     component_dict = dict()
     new_scalers = [0, 0, 0]
     for estimator in estimator_list:
@@ -283,11 +290,10 @@ def get_X(new_subset, estimator_list, train_scaler = None): # ls of str
                 ESM_subset = scaler.fit_transform(ESM_subset)
                 new_scalers[0] = scaler
                 #std_devs = np.std(ESM_subset, axis=0)
-                #ESM_subset = ESM_subset / std_devs
-                component_dict["ESM"] = ESM_subset # X_normalized
+                #ESM_subset = ESM_subset / std_devs # X_normalized
             else: # train_scaler will be an ls of scalers for the appropriate features
                 ESM_subset = train_scaler[0].transform(ESM_subset)
-                component_dict["ESM"] = ESM_subset
+            component_dict["ESM"] = ESM_subset
         if "LLR" in estimator:
             LLR_subset = (new_subset.esm_score.values)
             LLR_subset = LLR_subset.reshape(LLR_subset.shape[0], 1)
@@ -295,10 +301,9 @@ def get_X(new_subset, estimator_list, train_scaler = None): # ls of str
                 scaler = StandardScaler()
                 LLR_subset = scaler.fit_transform(LLR_subset)
                 new_scalers[1] = scaler
-                component_dict["LLR"] = LLR_subset
             else: # train_scaler will be an ls of scalers for the appropriate features
                 LLR_subset = train_scaler[1].transform(LLR_subset)
-                component_dict["LLR"] = LLR_subset
+            component_dict["LLR"] = LLR_subset
         if "one-hot" in estimator:
             # add the augment to LLR -- just a one hot encoding
             seqs = new_subset.mutated_sequence.values
@@ -307,34 +312,66 @@ def get_X(new_subset, estimator_list, train_scaler = None): # ls of str
                 scaler = StandardScaler()
                 one_hot = scaler.fit_transform(one_hot)
                 new_scalers[2] = scaler
-                component_dict["one-hot"] = one_hot
             else:
                 one_hot = train_scaler[2].transform(one_hot)
-                component_dict["one-hot"] = one_hot
+            component_dict["one-hot"] = one_hot
     # now that all components are gathered, create the X_arr combinations based on the estimator list
     X_arr = []
+
     for estimator in estimator_list:
-        # for simple ones
-        # needs to be modified to acount for knn_ESM and LLR_direct
         # break the str into pieces based on some separator, let's say "_"
         pieces = estimator.split("_")
-        combo = all(piece in component_dict for piece in pieces)
-        #print(estimator, combo)
-        #if estimator in component_dict.keys():
+        combo = all(piece in component_dict for piece in pieces) # this is true for one-hot
+        # for simple ones
         if not combo:
             bools = [piece in component_dict for piece in pieces]
             estimator_indices = [i for i, val in enumerate(bools) if val]
             if len(estimator_indices) > 1:
                 raise NotImplementedError
             X = component_dict[pieces[estimator_indices[0]]]
-            
+        # why is one-hot going to the combo part?
         else: # otherwise they are combinations
             all_together = []
-            for piece in pieces:
-                all_together.append(component_dict[piece])
+            final_weights = []
+            if len(pieces) == 2:
+                # find the piece not observed
+                missing_piece = list(component_dict.keys() - set(pieces))[0]
+                # map that piece to the appropriate weighting parameter
+                # map_to_params[missing_piece] 
+                # during the weighting process, absorb the lost weight to the two remaining
+                for piece in pieces:
+                    all_together.append((map_to_params[piece] + map_to_params[missing_piece] /2) * component_dict[piece])
+                # NEVER update any of the actual weight variables
+            else: # do nothing
+                for piece in pieces:
+                    # now we apply the weights. 
+                    all_together.append(map_to_params[piece] * component_dict[piece])
+#             raise Error
+#             if len(all_together) == 2: # then we need to sum the remaining weight to make them all add to one
+#                 # simplex method? -- look it up -- sounds like from linear programming
+#                 if "one-hot" and "LLR" in seen_pieces:
+#                     # then yotta must be absorbed. split it equally
+#                     beta += yotta / 2
+#                     gamma += yotta / 2
+#                     # let's make this not assume an order on the component types
+#                     # that person increased your toughness a lot, it was inspiring :)
+#                     # this should be a function
+#                     for i in range(len(seen_pieces)):
+#                         if seen_pieces[i] == "LLR":
+#                             all_together[i] = beta * all_together[i]
+#                         elif seen_pieces[i] == "one-hot":
+#                             all_together[i] = gamma * all_together[i]
+#                         else: 
+#                             raise error
+                #if "one-hot" and "ESM" in seen_pieces:
+                    # then beta must be absorbed. split it equally
+                #if "LLR" and "ESM" in seen_pieces:
+                    # then gamma must be absorbed. split it equally
+            # otherwise this is the 3 piece special, simply apply the weight set as intended       
             # concatenate and place in X_arr
             X = np.concatenate(all_together, axis=1)
         X_arr.append(X)#X_normalized)
+
     # y_arr is just DMS_score
     y_arr = new_subset.DMS_score.values
     y_arr = y_arr.reshape(y_arr.shape[0], 1)
@@ -351,7 +388,7 @@ def train_and_predict(X_train, y_train, X_test, y_test, corre_ls, lm):
     return corre_ls
 
 # add  regressor_list [len(estimator_list)] where element is in the set {LLR_direct, knn, Ridge}
-def training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha): 
+def training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha, beta, gamma, yotta): 
     seed_list = [i for i in range(seed_number)]
     unique_assays = human_assays_only['assay'].unique()
     subset = []
@@ -395,9 +432,9 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
                         with tqdm(total=len(train_splits.keys()), desc="Split Number", position=5, leave=False, file=sys.stderr) as pbar6:
                             for fraction, train_split in train_splits.items():
                                 # get the X arr for train
-                                X_train, y_train, train_scaler = get_X(train_split, estimator_list)
+                                X_train, y_train, train_scaler = get_X(train_split, estimator_list, beta, gamma, yotta)
                                 # same for test
-                                X_test, y_test, _ = get_X(test, estimator_list, train_scaler)
+                                X_test, y_test, _ = get_X(test, estimator_list, beta, gamma, yotta, train_scaler)
                                 # now define all_spearmans to catch
                                 all_spearmans = [[] for k in range(len(X_train))]
                                 with tqdm(total=len(all_spearmans), desc="Estimator Number", position=6, leave=False, file=sys.stderr) as pbar7:
@@ -441,7 +478,7 @@ def training_loop(human_assays_only, splits, seed_number, threshold, estimator_l
     return categories, for_graphs
 
 
-def write_out_pred_results(data, assay_list, estimator_list, outname, alpha):
+def write_out_pred_results(data, assay_list, estimator_list, outname, alpha, beta, gamma, yotta):
     # Convert the nested dictionary into a list of records
     records = []
     for split, assays in data.items():
@@ -453,6 +490,9 @@ def write_out_pred_results(data, assay_list, estimator_list, outname, alpha):
                     "estimator": estimator_list[est_idx], 
                     "correlation_score": assays[assay_idx][est_idx],
                     "alpha": alpha,
+                    "beta": beta, 
+                    "gamma": gamma, 
+                    "yotta": yotta
                 }
                 records.append(record)
     # Convert the list of records into a DataFrame
@@ -465,7 +505,7 @@ def write_out_pred_results(data, assay_list, estimator_list, outname, alpha):
 
 
 # okay let's modify this to make one graph across the whole assay set
-def make_graphs(estimator_list, df_path, layer_num, embed_type):
+def make_graphs(estimator_list, df_path, layer_num, embed_type,):
     # need to define the fig and ax here
     df = pd.read_csv(df_path)
     assert len(df.alpha.unique()) == 1
@@ -473,8 +513,11 @@ def make_graphs(estimator_list, df_path, layer_num, embed_type):
         split_type = "int"
     else: 
         split_type = "float"
-    
+    # extract param values
     alpha_param = df.alpha.unique()[0]
+    beta_param = df.beta.unique()[0]
+    gamma_param = df.gamma.unique()[0]
+    yotta_param = df.yotta.unique()[0]
     # Using the 'tab10' colormap for high contrast
     colors = plt.cm.tab10(np.linspace(0, 1, 10))
     # Create a separate figure for the scatterplot
@@ -535,7 +578,7 @@ def make_graphs(estimator_list, df_path, layer_num, embed_type):
     scatter_ax.set_xlabel('Number of Training Points')
     scatter_ax.set_ylabel("Spearman's Correlation with DMS scores")
     scatter_ax.set_title(
-        f"Spearman's Correlation for SM Human Assays, Layer: {layer_num}, Type: {embed_type}, Alpha: {alpha_param}"
+        f"Spearman's Correlation for SM Human Assays, Layer: {layer_num}, Type: {embed_type}, Alpha: {alpha_param}, Beta: {beta_param}, Gamma: {gamma_param}, Yotta: {yotta_param}"
     )#; N={size}") try to get N next time
     # Get existing handles and labels
     handles, labels = scatter_ax.get_legend_handles_labels()
@@ -546,8 +589,8 @@ def make_graphs(estimator_list, df_path, layer_num, embed_type):
     scatter_ax.legend(unique_handles, unique_labels, loc='upper left', bbox_to_anchor=(1, 1))
     scatter_fig.tight_layout()
     # Save or show the scatterplot figure
-    print(f"SM_Human_Assays_{layer_num}_{embed_type}_{alpha_param}_{split_type}.png")
-    plt.savefig(f"SM_Human_Assays_{layer_num}_{embed_type}_{alpha_param}_{split_type}.png", facecolor='white')
+    print(f"SM_Human_Assays_{layer_num}_{embed_type}_{alpha_param}_{beta_param}_{gamma_param}_{yotta_param}_{split_type}.png")
+    plt.savefig(f"SM_Human_Assays_{layer_num}_{embed_type}_{alpha_param}_{beta_param}_{gamma_param}_{yotta_param}_{split_type}.png", facecolor='white')
     plt.close(scatter_fig)
 
 # extra logic: train? bool, 
@@ -629,34 +672,34 @@ def create_parser():
     return parser
 # then make the graph code more modular
 def main():  
-    # now we adjust the alphas to [1, 5, 10, 50, 100]
-    # just do the alpha and standardize for now
-
-    # after choosing alpha:
     # weight them st yotta + beta + gamma = 1
     # make this is an input to the script so we can parallelize across 12 cases
     # keep unweighted (0.33, 0.33, 0.33)
+    # 1e-05, 1e-04, 1e-03, 1e-02, 0.1, 0.2, ..., 0.5, 0.6, .., 0.9, 0.99, 0.999, 0.9999, 0.99999
+    
+    # 1e-05, 1e-05, 1 -2*1e-05 all three vars. do this before we probe more layers. 
+    # 1e-04, 1e-04, 1-2*1e-04
+    # 1e-03, 1e-03, 1-2*1e-03
+    # 1e-02, 1e-02, 1-2*1e-02
     # 0.1, 0.8, 0.1 -- all three vars of this
     # 0.2, 0.6, 0.2 -- all three vars of this
-    # 0.45, 0.45, 0.1 -- all three vars of this
     # 0.4, 0.4, 0.2, -- all three vars of this
-    # so our problem is 12 times bigger
-    # but we only need representation mean 21 now, so 1/8 the number: still 
-    #beta, gamma, yotta = 0.1, 0.8, 0.1
+    # okay you can execute the sweep now with representation layer 21 and all the beta, gamma, yotta combos
+    beta, gamma, yotta = 0.1, 0.8, 0.1
     
     parser = create_parser()
     args = parser.parse_args()
     estimator_list = [
-            "one-hot", "LLR_one-hot",
-            "ESM", "LLR_ESM",
+            "one-hot_ridge", "LLR_one-hot",
+            "ESM_ridge", "LLR_ESM",
             "ESM_one-hot", "ESM_one-hot_LLR", "LLR_direct", "knn_ESM"]
     results = []
     # we can submit 5 jobs: one for each alpha this time!
-    alphas = [100, 500, 1000, 5000, 10000 ]#5, 10, 50, 100] #[0.1, 0.25, 0.5, 0.75, 1.0, ] #[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
+    alphas = [100]#[100, 500, 1000, 5000, 10000 ]#5, 10, 50, 100] #[0.1, 0.25, 0.5, 0.75, 1.0, ] #[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 10]
     # I would do [0.1, 0.25, 0.5, 0.75, 1.0, ]
-    splits = [10, 500, 1000]#[10, 100, 250, 500, 1000] #25
-    seed_number = 20#20
-    threshold = 1250#13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
+    splits = [10, 50, 100]#[10, 100, 250, 500, 1000] #25
+    seed_number = 5#20
+    threshold = 1250#13000#13000#1250#625# 313 # this allows 500 train points while still having 20% to validate on
     # while we're here I want 3 tqdm: alpha, sample number, assay_number.
     if not args.already_trained:
         # first get the Human assay SM dataframe.
@@ -677,43 +720,49 @@ def main():
                 #print("butt") # so the tqdm is not displaying as intended
                 for alpha in alphas:
                     # beta, gamma, yotta must be args to this function
-                    categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
+                    categories, for_graphs = training_loop(human_assays_only, splits, seed_number, 
+                                                           threshold, estimator_list, alpha,
+                                                          beta, gamma, yotta)
                     # categories is just ls of assays
                     # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
                     out_split = args.pred_results.split(".")[0]
                     split_type = "int" if type(splits[0]) == int else "float"
                     results_name = f"{out_split}_{split_type}_{alpha}.csv"
                     results.append(results_name)
-                    # beta, gamma, yotta must be args to this function
-                    write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha)# "Large_Human_Results.csv")
+                    # beta, gamma, yotta must be args to this function -- yep
+                    write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha, beta, gamma, yotta)# "Large_Human_Results.csv")
                     pbar2.update(1)
             pbar1.update(1)    
             # now do it again with the percentage based split set, using no threshold
-            splits = [0.01, 0.4, 0.8, ]#[0.01, 0.1, 0.3, 0.5, 0.8, ] # change to [ 0.05, ] 0.01* 500
-            threshold = 500#13000
+            splits = [0.01, 0.025, 0.05]#[0.01, 0.1, 0.3, 0.5, 0.8, ] # change to [ 0.05, ] 0.01* 500
+            threshold = 500#500#13000
             with tqdm(total=len(alphas), desc="Alphas", position=1,leave=False, file=sys.stderr) as pbar2:
                 for alpha in alphas:
-                    categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha)
+                    categories, for_graphs = training_loop(human_assays_only, splits, seed_number, threshold, estimator_list, alpha,
+                                                          beta, gamma, yotta)
                     # categories is just ls of assays
                     # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
                     out_split = args.pred_results.split(".")[0]
                     split_type = "int" if type(splits[0]) == int else "float"            
                     results_name = f"{out_split}_{split_type}_{alpha}.csv"
                     results.append(results_name)
-                    write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha)# "Large_Human_Results.csv")
+                    write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha, beta, gamma, yotta)# "Large_Human_Results.csv")
                     pbar2.update(1)
             pbar1.update(1)
         
     # need a 4th tqdm for the 2nd set of splits
     # if already trained
-    for alpha in alphas:
-        out_split = args.pred_results.split(".")[0]
-        # we asumme both int and float csvs exist
-        types = "int", "float"
-        for split_type in types:
-            #split_type = "int" if type(splits[0]) == int else "float"
-            results_name = f"{out_split}_{split_type}_{alpha}.csv"
-            results.append(results_name)
+    types = "int", "float"
+    if args.already_trained:
+        for alpha in alphas:
+            out_split = args.pred_results.split(".")[0]
+            # we asumme both int and float csvs exist 
+            for split_type in types:
+                # there's a bug in here
+                #split_type = "int" if type(splits[0]) == int else "float"
+                results_name = f"{out_split}_{split_type}_{alpha}.csv"
+                results.append(results_name)
+
     for res in results:
         # beta, gamma, yotta must be args to this function
         make_graphs(estimator_list, res, args.layer_num, args.embed_type)
