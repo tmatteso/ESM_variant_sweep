@@ -727,7 +727,7 @@ def main():
                     # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
                     out_split = args.pred_results.split(".")[0]
                     split_type = "int" if type(splits[0]) == int else "float"
-                    results_name = f"{out_split}_{split_type}_{alpha}.csv"
+                    results_name = f"{out_split}_{split_type}_{alpha}_{beta}_{gamma}_{yotta}.csv"
                     results.append(results_name)
                     # beta, gamma, yotta must be args to this function -- yep
                     write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha, beta, gamma, yotta)# "Large_Human_Results.csv")
@@ -744,7 +744,7 @@ def main():
                     # for_graphs is dict of ls of ls: {fraction: [assay[estimator]]}
                     out_split = args.pred_results.split(".")[0]
                     split_type = "int" if type(splits[0]) == int else "float"            
-                    results_name = f"{out_split}_{split_type}_{alpha}.csv"
+                    results_name = f"{out_split}_{split_type}_{alpha}_{beta}_{gamma}_{yotta}.csv"
                     results.append(results_name)
                     write_out_pred_results(for_graphs, categories, estimator_list, results_name, alpha, beta, gamma, yotta)# "Large_Human_Results.csv")
                     pbar2.update(1)
